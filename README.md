@@ -99,6 +99,36 @@ Override defaults:
 python -m src.train --epochs 30 --batch_size 4 --lr 5e-5
 ```
 
+## Initial Results (Debug Run)
+
+First end-to-end sanity check on the debug subset (20 labeled images, 2 epochs,
+batch size 2, GTX 1650 4 GB VRAM):
+
+```
+Device : cuda
+Debug  : True
+Epochs : 2
+Batch  : 2
+
+trainable params: 589,824 || all params: 87,170,304 || trainable%: 0.6766
+
+Epoch 1/2  loss=0.8843  ce=1.7687  con=0.0000  acc=0.000  (10.1 s)
+Epoch 2/2  loss=0.5786  ce=1.1572  con=0.0000  acc=0.600  (2.4 s)
+
+Model saved to checkpoints/dfu_dino_lora.pt
+```
+
+**Key observations**
+
+- Loss drops from 0.8843 → 0.5786 (−34 %) in a single additional epoch,
+  confirming the LoRA adapters and head are learning.
+- Accuracy rises from 0 % → 60 % on the tiny debug split.
+- SupCon loss (`con`) registers 0.0000 at this batch size / subset size — this
+  is expected; richer batches (full run) are needed to form meaningful
+  contrastive pairs.
+- Only **0.68 % of parameters are trainable**, keeping VRAM well within the
+  4 GB budget.
+
 ## License
 
 This project is for academic and research purposes.
