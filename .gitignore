@@ -1,0 +1,46 @@
+# ── Data (large image datasets — never commit) ──────────────────────────────
+Data/
+
+# ── Model checkpoints & artifacts ────────────────────────────────────────────
+checkpoints/
+*.pt
+*.pth
+*.onnx
+*.safetensors
+wandb/
+runs/
+mlruns/
+
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+dist/
+build/
+*.so
+
+# ── Virtual environments ─────────────────────────────────────────────────────
+.env
+.venv/
+env/
+venv/
+conda-meta/
+
+# ── Jupyter ──────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+
+# ── IDE / Editor ─────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── OS ───────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Hugging Face cache (can be very large) ───────────────────────────────────
+.cache/
