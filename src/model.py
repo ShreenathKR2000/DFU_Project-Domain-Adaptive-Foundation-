@@ -36,7 +36,7 @@ class DFUDinoLoRA(nn.Module):
 
     def __init__(
         self,
-        model_name: str = "facebook/dinov2-vitb14",
+        model_name = "facebook/dinov2-base",
         num_classes: int = NUM_CLASSES,
         lora_rank: int = 16,
         lora_alpha: int = 32,

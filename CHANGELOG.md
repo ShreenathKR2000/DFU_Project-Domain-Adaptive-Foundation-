@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-02-28
+
+### Added
+
+- `src/pretrain_model.py` — `DFUDinoLoRAForMIM`: SimMIM-style masked-image-
+  modeling wrapper around `DFUDinoLoRA`.  Masks 60 % of 14×14 patches,
+  reconstructs original pixel values with a lightweight LayerNorm + Linear
+  decoder (453,708 params).  Loss: L1 on masked patches only.
+- `src/pretrain.py` — Domain-adaptive pre-training loop (Phase 1).
+  Loads only the 3,994 unlabeled images from `train.csv`, supports the
+  same `--debug` flag (20 images, batch_size=2, 2 epochs) for 4 GB VRAM.
+  Saves both the full pretrain model and a standalone backbone LoRA
+  checkpoint for Phase 2 fine-tuning.
+
+### Verified
+
+- Debug pre-training run on GTX 1650 (4 GB VRAM):
+  - 20 unlabeled images, batch_size=2, 2 epochs, 60 % mask ratio.
+  - Epoch 1: loss=0.757032 | Epoch 2: loss=0.659234 (−13 %).
+  - Checkpoints saved to `checkpoints/dfu_pretrain_mim.pt` and
+    `checkpoints/dfu_pretrained_backbone.pt`.
+
 ## [0.1.1] - 2026-02-28
 
 ### Verified

@@ -14,15 +14,30 @@ The DFUC2021 dataset exhibits two key challenges:
 
 ## Approach
 
+A **two-phase** training pipeline, both fitting within a **GTX 1650 (4 GB VRAM)**:
+
+### Phase 1 — Domain-Adaptive Pre-training (unsupervised)
+
 | Component | Detail |
 |---|---|
-| Backbone | `facebook/dinov2-vitb14` (frozen) |
-| Adaptation | LoRA rank-16 on Q/V attention projections (`peft`) |
-| Loss | 0.5 * CrossEntropy + 0.5 * SupConLoss (`pytorch-metric-learning`) |
-| Head | LayerNorm + Linear (768 -> 4) |
+| Data | 3,994 **unlabeled** DFU images |
+| Task | Masked Image Modeling (SimMIM-style) |
+| Masking | 60 % of 14×14 patches zeroed at the pixel level |
+| Decoder | LayerNorm + Linear (768 → 588) — reconstructs RGB patches |
+| Loss | L1 between predicted and original pixels (masked patches only) |
+| Trainable | LoRA adapters (Q/V) + decoder head |
 
-Only the LoRA adapters and the classification head are trained, keeping GPU
-memory usage low enough for a **GTX 1650 (4 GB VRAM)**.
+### Phase 2 — Supervised Fine-tuning
+
+| Component | Detail |
+|---|---|
+| Data | 5,955 **labeled** DFU images |
+| Backbone | `facebook/dinov2-base` (frozen) + pre-trained LoRA adapters |
+| Loss | 0.5 × CrossEntropy + 0.5 × SupConLoss (`pytorch-metric-learning`) |
+| Head | LayerNorm + Linear (768 → 4) |
+| Trainable | LoRA adapters + classification head |
+
+Only **0.68 % of parameters** are ever trainable, keeping GPU memory low.
 
 ## Repository Structure
 
@@ -38,7 +53,9 @@ DFU_Project/
 │   ├── __init__.py
 │   ├── dataset.py           # DFUDataset + transforms
 │   ├── model.py             # DFUDinoLoRA (DINOv2 + LoRA + head)
-│   └── train.py             # Training loop with --debug flag
+│   ├── pretrain_model.py    # DFUDinoLoRAForMIM (MIM wrapper + decoder)
+│   ├── pretrain.py          # Phase 1: unsupervised MIM pre-training
+│   └── train.py             # Phase 2: supervised classification
 ├── .gitignore
 ├── CHANGELOG.md
 └── README.md
@@ -78,16 +95,41 @@ DFU_Project/Data/DFUC2021_train/train.csv
 
 ## Usage
 
-### Local sanity check (debug mode)
+### Phase 1 — Domain-Adaptive Pre-training
 
-Runs 2 epochs on 20 images with `batch_size=2` — safe for 4 GB VRAM:
+Debug run (20 unlabeled images, batch_size=2, 2 epochs):
 
 ```bash
 cd DFU_Project
+python -m src.pretrain --debug
+```
+
+Full pre-training run:
+
+```bash
+python -m src.pretrain
+```
+
+Override defaults:
+
+```bash
+python -m src.pretrain --epochs 30 --batch_size 4 --lr 5e-5 --mask_ratio 0.5
+```
+
+Outputs:
+- `checkpoints/dfu_pretrain_mim.pt` — full model (backbone + decoder), for
+  resuming pre-training.
+- `checkpoints/dfu_pretrained_backbone.pt` — LoRA weights only, for Phase 2.
+
+### Phase 2 — Supervised Fine-tuning
+
+Debug run (20 labeled images, batch_size=2, 2 epochs):
+
+```bash
 python -m src.train --debug
 ```
 
-### Full training run
+Full training run:
 
 ```bash
 python -m src.train
@@ -99,10 +141,34 @@ Override defaults:
 python -m src.train --epochs 30 --batch_size 4 --lr 5e-5
 ```
 
-## Initial Results (Debug Run)
+## Initial Results (Debug Runs)
 
-First end-to-end sanity check on the debug subset (20 labeled images, 2 epochs,
-batch size 2, GTX 1650 4 GB VRAM):
+### Phase 1 — MIM Pre-training (debug)
+
+```
+Device     : cuda
+Debug      : True
+Epochs     : 2
+Batch      : 2
+Mask ratio : 0.6
+Loss       : l1
+Unlabeled imgs : 3,994 (debug subset: 20)
+
+trainable params: 589,824 || all params: 87,170,304 || trainable%: 0.6766
+decoder params : 453,708
+
+Epoch 1/2  loss=0.757032  (3.0 s)
+Epoch 2/2  loss=0.659234  (1.8 s)
+
+Full pretrain model  → checkpoints/dfu_pretrain_mim.pt
+Backbone LoRA weights → checkpoints/dfu_pretrained_backbone.pt
+```
+
+**Observations** — Reconstruction loss drops from 0.757 → 0.659 (−13 %) across
+2 epochs on just 20 images, confirming the LoRA adapters + decoder learn to
+reconstruct masked patches.
+
+### Phase 2 — Supervised Fine-tuning (debug)
 
 ```
 Device : cuda
@@ -118,16 +184,9 @@ Epoch 2/2  loss=0.5786  ce=1.1572  con=0.0000  acc=0.600  (2.4 s)
 Model saved to checkpoints/dfu_dino_lora.pt
 ```
 
-**Key observations**
-
-- Loss drops from 0.8843 → 0.5786 (−34 %) in a single additional epoch,
-  confirming the LoRA adapters and head are learning.
-- Accuracy rises from 0 % → 60 % on the tiny debug split.
-- SupCon loss (`con`) registers 0.0000 at this batch size / subset size — this
-  is expected; richer batches (full run) are needed to form meaningful
-  contrastive pairs.
-- Only **0.68 % of parameters are trainable**, keeping VRAM well within the
-  4 GB budget.
+**Observations** — CE loss drops −34 %, accuracy rises 0 % → 60 % on the tiny
+debug split.  SupCon loss = 0 at this batch size (expected; richer batches
+produce meaningful contrastive pairs).
 
 ## License
 
