@@ -62,6 +62,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--epochs", type=int, default=None)
     parser.add_argument("--batch_size", type=int, default=None)
     parser.add_argument("--lr", type=float, default=DEFAULT_LR)
+    parser.add_argument(
+        "--pretrained_lora_path",
+        type=str,
+        default=None,
+        help="Path to Phase-1 LoRA checkpoint (e.g. checkpoints/dfu_pretrained_backbone.pt).",
+    )
     return parser.parse_args()
 
 
@@ -148,6 +154,7 @@ def main() -> None:
     print(f"Debug  : {debug}")
     print(f"Epochs : {epochs}")
     print(f"Batch  : {batch_size}")
+    print(f"LoRA   : {args.pretrained_lora_path or 'scratch'}")
 
     # ── data ─────────────────────────────────────────────────────────────
     labeled_df, _ = load_and_split_csv(CSV_PATH)
@@ -160,7 +167,7 @@ def main() -> None:
     )
 
     # ── model ────────────────────────────────────────────────────────────
-    model = DFUDinoLoRA()
+    model = DFUDinoLoRA(pretrained_lora_path=args.pretrained_lora_path)
     model.to(device)
     model.print_trainable_parameters()
 

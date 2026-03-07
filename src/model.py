@@ -7,9 +7,11 @@ Everything else in the backbone stays frozen.
 
 from __future__ import annotations
 
+from typing import Optional
+
 import torch
 import torch.nn as nn
-from peft import LoraConfig, get_peft_model
+from peft import LoraConfig, get_peft_model, set_peft_model_state_dict
 from transformers import Dinov2Model
 
 
@@ -23,7 +25,7 @@ class DFUDinoLoRA(nn.Module):
     Parameters
     ----------
     model_name : str
-        Hugging Face model id (default ``facebook/dinov2-vitb14``).
+        Hugging Face model id (default ``facebook/dinov2-base``).
     num_classes : int
         Number of output classes (default 4).
     lora_rank : int
@@ -32,6 +34,11 @@ class DFUDinoLoRA(nn.Module):
         LoRA scaling factor (default 32).
     lora_dropout : float
         Dropout inside LoRA layers (default 0.1).
+    pretrained_lora_path : str or None
+        Path to a Phase-1 LoRA checkpoint (``dfu_pretrained_backbone.pt``).
+        When provided, the saved LoRA adapter weights are loaded into the
+        backbone *before* the classification head is trained, giving the
+        adapters a domain-adapted starting point.
     """
 
     def __init__(
@@ -41,6 +48,7 @@ class DFUDinoLoRA(nn.Module):
         lora_rank: int = 16,
         lora_alpha: int = 32,
         lora_dropout: float = 0.1,
+        pretrained_lora_path: Optional[str] = None,
     ) -> None:
         super().__init__()
 
@@ -58,6 +66,12 @@ class DFUDinoLoRA(nn.Module):
             bias="none",
         )
         self.backbone = get_peft_model(backbone, lora_config)
+
+        # 2b. (Optional) Load domain-adapted LoRA weights from Phase 1.
+        if pretrained_lora_path is not None:
+            state = torch.load(pretrained_lora_path, map_location="cpu")
+            set_peft_model_state_dict(self.backbone, state)
+            print(f"Loaded Phase-1 LoRA weights from {pretrained_lora_path}")
 
         # 3. Classification head on top of the [CLS] token embedding.
         hidden_size = backbone.config.hidden_size  # 768 for ViT-B/14

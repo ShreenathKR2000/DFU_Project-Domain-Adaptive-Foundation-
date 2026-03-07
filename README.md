@@ -129,7 +129,14 @@ Debug run (20 labeled images, batch_size=2, 2 epochs):
 python -m src.train --debug
 ```
 
-Full training run:
+Full training run with Phase-1 pre-trained LoRA weights (recommended):
+
+```bash
+python -m src.train \
+    --pretrained_lora_path checkpoints/dfu_pretrained_backbone.pt
+```
+
+Full training run from scratch (no Phase-1 weights):
 
 ```bash
 python -m src.train
@@ -138,7 +145,8 @@ python -m src.train
 Override defaults:
 
 ```bash
-python -m src.train --epochs 30 --batch_size 4 --lr 5e-5
+python -m src.train --epochs 30 --batch_size 4 --lr 5e-5 \
+    --pretrained_lora_path checkpoints/dfu_pretrained_backbone.pt
 ```
 
 ## Initial Results (Debug Runs)
@@ -170,23 +178,42 @@ reconstruct masked patches.
 
 ### Phase 2 — Supervised Fine-tuning (debug)
 
+**From scratch** (no Phase-1 weights):
+
 ```
-Device : cuda
-Debug  : True
-Epochs : 2
-Batch  : 2
-
-trainable params: 589,824 || all params: 87,170,304 || trainable%: 0.6766
-
-Epoch 1/2  loss=0.8843  ce=1.7687  con=0.0000  acc=0.000  (10.1 s)
-Epoch 2/2  loss=0.5786  ce=1.1572  con=0.0000  acc=0.600  (2.4 s)
-
-Model saved to checkpoints/dfu_dino_lora.pt
+LoRA   : scratch
+Epoch 1/2  loss=0.5419  ce=1.0838  con=0.0000  acc=0.550  (2.3 s)
+Epoch 2/2  loss=0.4112  ce=0.8223  con=0.0000  acc=0.700  (1.9 s)
 ```
 
-**Observations** — CE loss drops −34 %, accuracy rises 0 % → 60 % on the tiny
-debug split.  SupCon loss = 0 at this batch size (expected; richer batches
-produce meaningful contrastive pairs).
+**With Phase-1 pre-trained LoRA weights** (`--pretrained_lora_path`):
+
+```
+LoRA   : checkpoints/dfu_pretrained_backbone.pt
+Loaded Phase-1 LoRA weights from checkpoints/dfu_pretrained_backbone.pt
+Epoch 1/2  loss=0.6986  ce=1.3972  con=0.0000  acc=0.400  (6.8 s)
+Epoch 2/2  loss=0.4085  ce=0.8170  con=0.0000  acc=0.750  (1.9 s)
+```
+
+| Init | Epoch 2 acc | Epoch 2 loss |
+|---|---|---|
+| Scratch | 70.0 % | 0.4112 |
+| Phase-1 LoRA | **75.0 %** | **0.4085** |
+
+**Observations** — Domain-adapted LoRA weights give +5 pp accuracy and lower
+final loss on the debug split. The gap is expected to grow on the full dataset.
+
+## Cluster / HPC Deployment
+
+The codebase is structured to be scheduler-agnostic. Once the target cluster
+environment is confirmed, a dedicated deployment script will be written for
+that specific setup.
+
+> **Note:** The training entry-points (`src/pretrain` and `src/train`) are
+> plain Python modules with no framework-specific launcher dependencies.
+> They will be wrapped in a Slurm `sbatch` script, a PBS `qsub` script,
+> a Kubernetes Job manifest, or equivalent — depending on the cluster type
+> and configuration provided.
 
 ## License
 

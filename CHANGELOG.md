@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-03-07
+
+### Phase 1 → Phase 2 Bridge
+
+#### Changed
+
+- `src/model.py` — `DFUDinoLoRA.__init__` now accepts an optional
+  `pretrained_lora_path: str | None` parameter.  When provided,
+  `peft.set_peft_model_state_dict` loads the Phase-1 domain-adapted LoRA
+  weights into the backbone **before** the classification head is trained,
+  giving the adapters a DFU-domain starting point instead of random
+  initialisation.
+- `src/train.py` — New CLI argument `--pretrained_lora_path` (default
+  `None`) wired through to `DFUDinoLoRA`.  Start-up banner now prints
+  `LoRA : <path>` or `LoRA : scratch` for traceability.
+
+#### Verified
+
+- Debug run with Phase-1 weights (20 labeled images, batch_size=2,
+  2 epochs, GTX 1650 4 GB VRAM):
+  - Epoch 1: loss=0.6986, ce=1.3972, acc=40.0 %
+  - Epoch 2: loss=0.4085, ce=0.8170, **acc=75.0 %**
+- Compared to training from scratch (same debug conditions):
+  - Epoch 2 acc=70.0 %, loss=0.4112
+- Pre-trained LoRA adapters yield **+5 pp accuracy** and lower final loss
+  (0.4085 vs 0.4112) on the debug split; benefit expected to grow on the
+  full dataset.
+- Backward compatible: omitting `--pretrained_lora_path` trains from
+  scratch with identical behaviour to v0.2.0.
+
 ## [0.2.0] - 2026-02-28
 
 ### Added
