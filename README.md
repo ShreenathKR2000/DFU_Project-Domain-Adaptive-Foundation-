@@ -61,6 +61,7 @@ DFU_Project/
 │   └── predict.py           # TTA + ensemble inference, submission CSV
 ├── slurm/                   # sbatch scripts
 ├── run_lowlabel.sh          # low-label experiment (one seed)
+├── run_pseudo.sh            # pseudo-labelling pipeline (one split seed)
 ├── .gitignore
 ├── CHANGELOG.md
 └── README.md
@@ -330,6 +331,37 @@ Regularisation aimed at shift (compare on the group split): `--aug strong`
 then ensemble + TTA (`src.predict`). Further ideas: pseudo-labelling the 3,994
 unlabeled training images, a bigger backbone (`dinov2-large`), and — only if the
 challenge rules allow it — Phase-1 adaptation on the unlabeled test images.
+
+### Pseudo-labelling the unlabeled images
+
+The 3,994 unlabeled DFUC2021 training images are used so far only for Phase 1.
+Pseudo-labelling (noisy student) uses them for *supervised* training too:
+
+1. train teachers on the labeled **train split** (same `--split_seed`, different
+   `--seed`s — the teachers never see the val/test labels of that split);
+2. predict the unlabeled images with the teacher ensemble + flip TTA
+   (`python -m src.predict --unlabeled_train ...` writes `*_probs.csv`);
+3. train a student on train + confident pseudo-labels (`--pseudo_csv`,
+   `--pseudo_thresh`, `--pseudo_max_per_class`) with strong augmentation.
+
+```bash
+GROUP_CSV=groups.csv ./run_pseudo.sh 0     # also 1, 2 for a paired comparison
+python -m src.summarize
+```
+
+`run_pseudo.sh` trains the student **and** a baseline with identical settings but
+no pseudo-labels; `summarize` shows them as separate rows (`[group+strong-aug+pseudo0.9]`
+vs `[group+strong-aug]`). The student is useful only if it beats that baseline over
+several split seeds.
+
+Notes: confident predictions are dominated by the big classes, so watch the
+`Pseudo-labels: +N images {...}` line and use `CAP=<n>` (or a lower `THRESH`) to
+keep ischaemia/both from being drowned out; pseudo-labels can reinforce teacher
+mistakes (confirmation bias), so try a higher threshold if the student gets worse;
+images in the unlabeled pool are not covered by `groups.csv`, so near-duplicates
+of held-out images can enter training (with pseudo-labels, never true ones).
+`--pseudo_img_dir` accepts other image folders (only if the challenge rules allow).
+Pseudo-labelling can be repeated: use the student ensemble as the next teacher.
 
 ### Toward a leaderboard submission
 

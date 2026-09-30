@@ -28,11 +28,12 @@ import random
 import time
 
 import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from pytorch_metric_learning.losses import SupConLoss
-from sklearn.metrics import confusion_matrix, precision_recall_fscore_support
+from sklearn.metrics import confusion_matrix, precision_recall_fscore_support, roc_auc_score
 from torch.utils.data import DataLoader, WeightedRandomSampler
 
 from src.dataset import (
@@ -45,6 +46,7 @@ from src.dataset import (
     labels_from_df,
     load_and_split_csv,
     load_groups,
+    load_pseudo,
     make_splits,
     subsample_stratified,
 )
@@ -118,6 +120,18 @@ def parse_args() -> argparse.Namespace:
         help="Training augmentation strength.",
     )
     parser.add_argument("--label_smoothing", type=float, default=0.0)
+    parser.add_argument(
+        "--pseudo_csv", type=str, default=None,
+        help="Teacher probabilities (from `src.predict --unlabeled_train`); confident "
+             "predictions are added to the training set as pseudo-labels. The teachers "
+             "must have been trained on the same split (never on this run's val/test).",
+    )
+    parser.add_argument("--pseudo_thresh", type=float, default=0.9,
+                        help="Minimum teacher confidence for a pseudo-label.")
+    parser.add_argument("--pseudo_max_per_class", type=int, default=None,
+                        help="Keep at most this many (most confident) pseudo-labels per class.")
+    parser.add_argument("--pseudo_img_dir", type=str, default=None,
+                        help="Directory of the pseudo-labeled images if not the DFUC2021 image dir.")
     parser.add_argument(
         "--final", action="store_true",
         help="Leaderboard mode: train on ALL labeled images (no val/test holdout) for "
@@ -235,22 +249,34 @@ def evaluate(
     Macro averages only cover classes present in the evaluated split.
     """
     model.eval()
-    preds, targets = [], []
+    probs, targets = [], []
     for images, labels in loader:
         logits, _ = model(images.to(device))
-        preds.append(logits.argmax(dim=1).cpu())
+        probs.append(F.softmax(logits.float(), dim=1).cpu())
         targets.append(labels)
-    return compute_metrics(torch.cat(targets).numpy(), torch.cat(preds).numpy())
+    probs = torch.cat(probs).numpy()
+    return compute_metrics(torch.cat(targets).numpy(), probs.argmax(1), probs)
 
 
-def compute_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict:
-    """Accuracy, macro-F1, per-class precision/recall/F1 and confusion matrix."""
+def compute_metrics(
+    y_true: np.ndarray, y_pred: np.ndarray, probs: np.ndarray | None = None
+) -> dict:
+    """Accuracy, macro-F1, per-class precision/recall/F1, confusion matrix and,
+    when class probabilities are given, macro / micro AUC (as on the DFUC2021
+    leaderboard; ``None`` if a class is absent from ``y_true``)."""
     ids = list(range(len(LABEL_COLS)))
     prec, rec, f1, support = precision_recall_fscore_support(
         y_true, y_pred, labels=ids, zero_division=0
     )
     present = support > 0
+    macro_auc = micro_auc = None
+    if probs is not None and present.all():
+        onehot = np.eye(len(LABEL_COLS))[y_true]
+        macro_auc = float(roc_auc_score(onehot, probs, average="macro"))
+        micro_auc = float(roc_auc_score(onehot.ravel(), probs.ravel()))
     return {
+        "macro_auc": macro_auc,
+        "micro_auc": micro_auc,
         "accuracy": float((y_true == y_pred).mean()),
         "balanced_accuracy": float(rec[present].mean()),
         "macro_f1": float(f1[present].mean()),
@@ -321,6 +347,13 @@ def main() -> None:
         if args.train_frac < 1.0:
             train_df = subsample_stratified(train_df, args.train_frac, seed=split_seed)
             print(f"Low-label setting: keeping {args.train_frac:.0%} of the training split")
+    if args.pseudo_csv:
+        pseudo_df = load_pseudo(
+            args.pseudo_csv, args.pseudo_thresh, args.pseudo_max_per_class,
+            args.pseudo_img_dir or IMG_DIR,
+        )
+        print(f"Pseudo-labels: +{len(pseudo_df)} images  {class_counts(pseudo_df)}")
+        train_df = pd.concat([train_df, pseudo_df], ignore_index=True)
     for name, part in (("train", train_df), ("val", val_df), ("test", test_df)):
         if part is not None:
             print(f"{name:<5} split: {len(part):>5}  {class_counts(part)}")
@@ -440,7 +473,8 @@ def main() -> None:
     print(f"\nBest epoch {best_epoch} (val macro-F1 {best_f1:.4f}) → test:")
     print(
         f"  acc={test['accuracy']:.3f}  bal_acc={test['balanced_accuracy']:.3f}  "
-        f"macro_f1={test['macro_f1']:.4f}"
+        f"macro_f1={test['macro_f1']:.4f}  macro_auc="
+        + (f"{test['macro_auc']:.4f}" if test["macro_auc"] is not None else "n/a")
     )
     print(f"  last epoch ({epochs}): macro_f1={test_last['macro_f1']:.4f}  "
           f"acc={test_last['accuracy']:.3f}")

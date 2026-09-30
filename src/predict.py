@@ -65,6 +65,9 @@ def parse_args() -> argparse.Namespace:
                      help="Evaluate on a split of the labeled DFUC2021 data.")
     src.add_argument("--img_dir", type=str,
                      help="Directory of unlabeled images to predict.")
+    src.add_argument("--unlabeled_train", action="store_true",
+                     help="Predict the unlabeled rows of the DFUC2021 train.csv (teacher "
+                          "step of pseudo-labelling; writes --out and *_probs.csv).")
     p.add_argument("--split_seed", type=int, default=0)
     p.add_argument("--group_csv", type=str, default=None,
                    help="Same group CSV that was used for training (--split only).")
@@ -120,6 +123,10 @@ def main() -> None:
         y_true = labels_from_df(df)
         print(f"Evaluating on the '{args.split}' split ({len(df)} images, "
               f"split seed {args.split_seed})")
+    elif args.unlabeled_train:
+        _, unlabeled_df = load_and_split_csv(CSV_PATH)
+        df, img_dir, y_true = unlabeled_df[["image"]].reset_index(drop=True), IMG_DIR, None
+        print(f"Predicting the {len(df)} unlabeled training images")
     else:
         names = sorted(f for f in os.listdir(args.img_dir)
                        if f.lower().endswith((".jpg", ".jpeg", ".png")))
@@ -138,7 +145,7 @@ def main() -> None:
         probs = predict_probs(model, loader, device, args.tta)
         all_probs.append(probs)
         if y_true is not None:
-            m = compute_metrics(y_true, probs.argmax(1))
+            m = compute_metrics(y_true, probs.argmax(1), probs)
             print(f"  {os.path.basename(path):<40} macro-F1={m['macro_f1']:.4f}  "
                   f"acc={m['accuracy']:.3f}")
         del model
@@ -147,11 +154,12 @@ def main() -> None:
     ensemble = np.mean(all_probs, axis=0)
 
     if y_true is not None:
-        m = compute_metrics(y_true, ensemble.argmax(1))
+        m = compute_metrics(y_true, ensemble.argmax(1), ensemble)
         label = "ensemble" if len(all_probs) > 1 else "single model"
         print(f"\n{label}{' + TTA' if args.tta else ''}: "
               f"macro-F1={m['macro_f1']:.4f}  bal_acc={m['balanced_accuracy']:.3f}  "
-              f"acc={m['accuracy']:.3f}")
+              f"acc={m['accuracy']:.3f}  macro_auc="
+              + (f"{m['macro_auc']:.4f}" if m["macro_auc"] is not None else "n/a"))
         for name, c in m["per_class"].items():
             print(f"  {name:<10} P={c['precision']:.3f}  R={c['recall']:.3f}  "
                   f"F1={c['f1']:.3f}  n={c['support']}")
