@@ -77,10 +77,18 @@ class DFUDinoLoRA(nn.Module):
         # 2b. (Optional) Load domain-adapted LoRA weights from Phase 1.
         if pretrained_lora_path is not None:
             state = torch.load(pretrained_lora_path, map_location="cpu")
-            n_lora = sum("lora_" in k for k in state)
+            lora_state = {k: v for k, v in state.items() if "lora_" in k}
+            n_lora = len(lora_state)
             if n_lora == 0:
                 raise ValueError(f"No LoRA tensors found in {pretrained_lora_path}")
-            set_peft_model_state_dict(self.backbone, state)
+            # pretrain.py saves backbone.state_dict(), whose keys already match
+            # this model, so load them directly.  (Older peft versions'
+            # set_peft_model_state_dict re-inserts the adapter name and then
+            # silently ignores every key.)  Fall back to it for checkpoints
+            # saved with get_peft_model_state_dict.
+            result = self.backbone.load_state_dict(lora_state, strict=False)
+            if result.unexpected_keys:
+                set_peft_model_state_dict(self.backbone, state)
             # LoRA B matrices start at zero, so if they are still all zero the
             # load was silently ignored and the run would equal "scratch".
             n_nonzero = sum(
