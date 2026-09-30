@@ -243,3 +243,34 @@ def subsample_stratified(
     except ValueError:
         keep, _ = train_test_split(idx, train_size=frac, random_state=seed)
     return df.iloc[np.sort(keep)].reset_index(drop=True)
+
+
+def load_pseudo(
+    probs_csv: str,
+    thresh: float = 0.9,
+    max_per_class: Optional[int] = None,
+    img_dir: Optional[str] = None,
+) -> pd.DataFrame:
+    """Pseudo-labeled frame from a teacher's ``image,none,infection,...`` probabilities.
+
+    Keeps images whose top-class probability is >= ``thresh``; ``max_per_class``
+    caps each class at its most confident images (rare classes are otherwise
+    swamped by the majority classes).  ``img_dir`` makes the image paths absolute
+    when the images live outside the main image directory.  Returns a frame with
+    ``image`` plus one-hot label columns, usable like labeled training data.
+    """
+    df = pd.read_csv(probs_csv)
+    probs = df[LABEL_COLS].to_numpy(dtype=float)
+    pred, conf = probs.argmax(1), probs.max(1)
+    keep = conf >= thresh
+    if max_per_class:
+        for c in range(len(LABEL_COLS)):
+            idx = np.where(keep & (pred == c))[0]
+            if len(idx) > max_per_class:
+                order = idx[np.argsort(-conf[idx])]
+                keep[order[max_per_class:]] = False
+    out = df.loc[keep, ["image"]].reset_index(drop=True)
+    if img_dir:
+        out["image"] = [os.path.abspath(os.path.join(img_dir, f)) for f in out["image"]]
+    out[LABEL_COLS] = np.eye(len(LABEL_COLS), dtype=int)[pred[keep]]
+    return out

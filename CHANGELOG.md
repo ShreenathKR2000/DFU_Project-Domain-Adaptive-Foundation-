@@ -15,7 +15,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | First real result | 0.4.x | 3 seeds x 2 arms on ~4,100 labeled images: scratch 0.880 ± 0.017 vs pretrained 0.870 ± 0.010 test macro-F1 — **no measurable benefit of Phase 1 at full labels**. |
 | Label-efficiency study | 0.5.0 | `--train_frac`, grouped summary, CSV + plot, to test whether Phase 1 helps when labels are scarce. |
 | Leaderboard reality check | 0.7.0 | Live DFUC2021 leaderboard: top ≈ 0.65 / rank ~50 ≈ 0.55 macro-F1 vs 0.88 internally, so the random split leaks near-duplicates. Added near-duplicate grouping, group-aware splits, stronger augmentation and label smoothing. |
+| Using the unlabeled data for supervision | 0.8.0 | Noisy-student pseudo-labelling pipeline; leaderboard-style metrics (macro/micro AUC, per-class F1); summary rows separated by experiment variant. |
 | Towards a leaderboard | 0.6.0 | Higher resolution, LoRA rank, extra unlabeled data for Phase 1 (e.g. DFUC2020), train-on-everything mode, ensemble + TTA inference and a submission-style CSV. |
+
+## [0.8.0] - 2026-09-30
+
+### Added
+
+- Pseudo-labelling: `src.predict --unlabeled_train` (teacher predictions for the
+  unlabeled training images), `src.train --pseudo_csv / --pseudo_thresh /
+  --pseudo_max_per_class / --pseudo_img_dir`, `src.dataset.load_pseudo`, and
+  `run_pseudo.sh` (3 teachers -> pseudo-labels -> student + matched baseline).
+- Metrics: macro and micro AUC (as on the DFUC2021 leaderboard) in
+  `compute_metrics`, `src.train` output and `src.predict` output.
+
+### Changed
+
+- `src/summarize.py` — rows are now keyed by arm **and experiment variant**
+  (group split, augmentation, label smoothing, pseudo-labels, resolution, LoRA
+  rank, imbalance mode), so different experiments are never averaged together
+  (previously group-split or pseudo-label runs would have been merged with the
+  random-split runs); table shows per-class F1 and macro AUC like the
+  leaderboard.
+
+### Verified
+
+- Synthetic end-to-end run (teachers -> ensemble+TTA pseudo-labels -> student
+  -> summary); re-evaluating the student checkpoint with `src.predict` reproduced
+  the training-time metrics. Not yet run on the real data.
 
 ## [0.7.0] - 2026-09-30
 
