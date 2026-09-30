@@ -19,6 +19,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | Using the unlabeled data for supervision | 0.8.0 | Noisy-student pseudo-labelling pipeline; leaderboard-style metrics (macro/micro AUC, per-class F1); summary rows separated by experiment variant. |
 | Towards a leaderboard | 0.6.0 | Higher resolution, LoRA rank, extra unlabeled data for Phase 1 (e.g. DFUC2020), train-on-everything mode, ensemble + TTA inference and a submission-style CSV. |
 
+## [0.10.0] - 2026-09-30
+
+### Added
+
+- `scripts/run_all_experiments.sh` — one-shot suite for a ~90 min GPU window: pre-flight
+  checks, auto-chosen near-duplicate grouping, Phase 1 if no checkpoint exists, then
+  scratch/pretrained x basic/regularised, teachers -> pseudo-labels -> student, ensemble + TTA
+  evaluation and summary. Time-budgeted scheduler (skips jobs that would not finish), resumable.
+- `--amp` (bf16 autocast) for `src.train` / `src.pretrain`, TF32 matmuls, `make_groups --auto`,
+  env overrides `DFU_DATA_DIR`, `DFU_MODEL`, `DFU_N_LABELED`; group-aware split now warns loudly
+  if it falls back to a random split.
+
+### Verified
+
+- Outputs identical to 0.9.0 with `--amp` off; bf16 path runs on CPU. The full script has only
+  been syntax-checked, not run end to end.
+
 ## [0.9.0] - 2026-09-30
 
 ### Changed
