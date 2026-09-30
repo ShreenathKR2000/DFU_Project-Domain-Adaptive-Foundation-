@@ -38,7 +38,7 @@ from src.dataset import (
     load_and_split_csv,
     make_splits,
 )
-from src.train import CSV_PATH, IMG_DIR
+from src.common import CSV_PATH, IMG_DIR
 
 
 @torch.no_grad()

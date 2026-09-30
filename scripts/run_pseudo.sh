@@ -7,13 +7,14 @@
 # Compare student vs. baseline with `python -m src.summarize` (rows differ by the
 # "pseudo" tag). Run for several split seeds (0 1 2) to get a paired comparison.
 #
-#   GROUP_CSV=groups.csv ./run_pseudo.sh 0
+#   GROUP_CSV=groups.csv ./scripts/run_pseudo.sh 0
 # Optional env: ARM=pretrained (init from Phase-1 LoRA), LORA_PATH, THRESH (0.9),
 #               CAP (max pseudo-labels per class), EPOCHS (30)
 #
 # The teachers never see this split's val/test labels, so the test metrics stay clean.
 set -e
-SPLIT=${1:?usage: GROUP_CSV=groups.csv ./run_pseudo.sh <split_seed>}
+cd "$(dirname "$0")/.."   # run from the project root
+SPLIT=${1:?usage: GROUP_CSV=groups.csv ./scripts/run_pseudo.sh <split_seed>}
 ARM=${ARM:-scratch}
 EPOCHS=${EPOCHS:-30}
 THRESH=${THRESH:-0.9}

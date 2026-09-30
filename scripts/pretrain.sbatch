@@ -2,8 +2,8 @@
 # Phase 1: SimMIM domain-adaptive pre-training on the unlabeled DFU images.
 #
 # Submit from the project root, naming your GPU partition:
-#   sbatch --partition=<gpu-partition> slurm/pretrain.sbatch
-# Override epochs:  EPOCHS=150 sbatch --partition=... slurm/pretrain.sbatch
+#   sbatch --partition=<gpu-partition> scripts/pretrain.sbatch
+# Override epochs:  EPOCHS=150 sbatch --partition=... scripts/pretrain.sbatch
 #SBATCH --job-name=dfu_pretrain
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
