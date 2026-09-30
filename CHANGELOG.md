@@ -15,8 +15,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | First real result | 0.4.x | 3 seeds x 2 arms on ~4,100 labeled images: scratch 0.880 ± 0.017 vs pretrained 0.870 ± 0.010 test macro-F1 — **no measurable benefit of Phase 1 at full labels**. |
 | Label-efficiency study | 0.5.0 | `--train_frac`, grouped summary, CSV + plot, to test whether Phase 1 helps when labels are scarce. |
 | Leaderboard reality check | 0.7.0 | Live DFUC2021 leaderboard: top ≈ 0.65 / rank ~50 ≈ 0.55 macro-F1 vs 0.88 internally, so the random split leaks near-duplicates. Added near-duplicate grouping, group-aware splits, stronger augmentation and label smoothing. |
+| Clean-up and documentation | 0.9.0 | Shared modules (`common`, `metrics`), slimmer `train.py`, scripts moved to `scripts/`, `requirements.txt`, README rewritten and split into `docs/`; outputs verified identical to 0.8.0. |
 | Using the unlabeled data for supervision | 0.8.0 | Noisy-student pseudo-labelling pipeline; leaderboard-style metrics (macro/micro AUC, per-class F1); summary rows separated by experiment variant. |
 | Towards a leaderboard | 0.6.0 | Higher resolution, LoRA rank, extra unlabeled data for Phase 1 (e.g. DFUC2020), train-on-everything mode, ensemble + TTA inference and a submission-style CSV. |
+
+## [0.9.0] - 2026-09-30
+
+### Changed
+
+- **Refactor, no behaviour change** (an end-to-end synthetic regression run covering
+  pre-training with extra images, every `src.train` variant incl. `--final`,
+  `--pseudo_csv`, `src.predict` and `src.summarize` produced byte-identical
+  metrics before and after):
+  - `src/common.py` — paths, `set_seed`, `build_loader` (were duplicated in
+    `train.py` and `pretrain.py`).
+  - `src/metrics.py` — `compute_metrics`, `recall_str`; `predict.py` and
+    `make_groups.py` no longer import the whole trainer.
+  - `src/train.py` — split into `prepare_data`, `make_loaders`, `trainable_state`,
+    `train_one_epoch`, `evaluate`; argparse options grouped by purpose.
+- Scripts moved: `run_lowlabel.sh`, `run_pseudo.sh` -> `scripts/`; `slurm/*.sbatch`
+  -> `scripts/`. Shell scripts now `cd` to the project root themselves. (Older
+  changelog entries mention the previous locations.)
+- README rewritten (overview, status, approach, quick start, command table, layout);
+  details moved to `docs/EXPERIMENTS.md`, `docs/LEADERBOARD.md`, `docs/CLUSTER.md`.
+
+### Added
+
+- `requirements.txt`; `.gitignore` entries for logs and prediction CSVs.
+- `docs/LEADERBOARD.md` — current top-4 leaderboard scores, metric interpretation,
+  how the approach differs, target metrics and an honest expectation.
 
 ## [0.8.0] - 2026-09-30
 

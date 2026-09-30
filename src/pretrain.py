@@ -38,18 +38,9 @@ import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 
-from src.dataset import (
-    DFUDataset,
-    get_train_transforms,
-    load_and_split_csv,
-)
+from src.common import CSV_PATH, IMG_DIR, build_loader
+from src.dataset import get_train_transforms, load_and_split_csv
 from src.pretrain_model import DFUDinoLoRAForMIM
-
-# ── paths (relative to project root) ────────────────────────────────────────
-
-DATA_DIR = os.path.join("Data", "DFUC2021_train")
-CSV_PATH = os.path.join(DATA_DIR, "train.csv")
-IMG_DIR  = os.path.join(DATA_DIR, "images")
 
 # ── defaults ─────────────────────────────────────────────────────────────────
 
@@ -99,20 +90,6 @@ def parse_args() -> argparse.Namespace:
 
 
 # ── data ─────────────────────────────────────────────────────────────────────
-
-def build_loader(
-    df, img_dir: str, transform, batch_size: int, shuffle: bool = True,
-    num_workers: int = 2,
-) -> DataLoader:
-    ds = DFUDataset(df, img_dir, transform=transform)
-    return DataLoader(
-        ds,
-        batch_size=batch_size,
-        shuffle=shuffle,
-        num_workers=num_workers,
-        pin_memory=True,
-    )
-
 
 # ── one epoch ────────────────────────────────────────────────────────────────
 
