@@ -28,11 +28,12 @@ import random
 import time
 
 import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from pytorch_metric_learning.losses import SupConLoss
-from sklearn.metrics import confusion_matrix, precision_recall_fscore_support
+from sklearn.metrics import confusion_matrix, precision_recall_fscore_support, roc_auc_score
 from torch.utils.data import DataLoader, WeightedRandomSampler
 
 from src.dataset import (
@@ -44,6 +45,8 @@ from src.dataset import (
     get_train_transforms,
     labels_from_df,
     load_and_split_csv,
+    load_groups,
+    load_pseudo,
     make_splits,
     subsample_stratified,
 )
@@ -97,6 +100,43 @@ def parse_args() -> argparse.Namespace:
         "--train_frac", type=float, default=1.0,
         help="Fraction of the training split to keep (class-stratified, same "
              "subset for every run sharing --split_seed). Val/test are unchanged.",
+    )
+    parser.add_argument(
+        "--img_size", type=int, default=224,
+        help="Input resolution (multiple of 14). DINOv2 interpolates its position "
+             "embeddings; cost grows roughly with (size/224)^2.",
+    )
+    parser.add_argument(
+        "--lora_rank", type=int, default=16,
+        help="LoRA rank (alpha = 2 x rank). Must match the Phase-1 checkpoint.",
+    )
+    parser.add_argument(
+        "--group_csv", type=str, default=None,
+        help="image,group CSV from `python -m src.make_groups`; keeps near-duplicate "
+             "images in the same split (leak-free validation/test).",
+    )
+    parser.add_argument(
+        "--aug", choices=["basic", "strong"], default="basic",
+        help="Training augmentation strength.",
+    )
+    parser.add_argument("--label_smoothing", type=float, default=0.0)
+    parser.add_argument(
+        "--pseudo_csv", type=str, default=None,
+        help="Teacher probabilities (from `src.predict --unlabeled_train`); confident "
+             "predictions are added to the training set as pseudo-labels. The teachers "
+             "must have been trained on the same split (never on this run's val/test).",
+    )
+    parser.add_argument("--pseudo_thresh", type=float, default=0.9,
+                        help="Minimum teacher confidence for a pseudo-label.")
+    parser.add_argument("--pseudo_max_per_class", type=int, default=None,
+                        help="Keep at most this many (most confident) pseudo-labels per class.")
+    parser.add_argument("--pseudo_img_dir", type=str, default=None,
+                        help="Directory of the pseudo-labeled images if not the DFUC2021 image dir.")
+    parser.add_argument(
+        "--final", action="store_true",
+        help="Leaderboard mode: train on ALL labeled images (no val/test holdout) for "
+             "a fixed --epochs and save the last-epoch weights to "
+             "checkpoints/<run_name>_final.pt. Pick --epochs from held-out runs first.",
     )
     parser.add_argument(
         "--imbalance", choices=["none", "weights", "sampler"], default="none",
@@ -209,20 +249,34 @@ def evaluate(
     Macro averages only cover classes present in the evaluated split.
     """
     model.eval()
-    preds, targets = [], []
+    probs, targets = [], []
     for images, labels in loader:
         logits, _ = model(images.to(device))
-        preds.append(logits.argmax(dim=1).cpu())
+        probs.append(F.softmax(logits.float(), dim=1).cpu())
         targets.append(labels)
-    y_pred = torch.cat(preds).numpy()
-    y_true = torch.cat(targets).numpy()
+    probs = torch.cat(probs).numpy()
+    return compute_metrics(torch.cat(targets).numpy(), probs.argmax(1), probs)
 
+
+def compute_metrics(
+    y_true: np.ndarray, y_pred: np.ndarray, probs: np.ndarray | None = None
+) -> dict:
+    """Accuracy, macro-F1, per-class precision/recall/F1, confusion matrix and,
+    when class probabilities are given, macro / micro AUC (as on the DFUC2021
+    leaderboard; ``None`` if a class is absent from ``y_true``)."""
     ids = list(range(len(LABEL_COLS)))
     prec, rec, f1, support = precision_recall_fscore_support(
         y_true, y_pred, labels=ids, zero_division=0
     )
     present = support > 0
+    macro_auc = micro_auc = None
+    if probs is not None and present.all():
+        onehot = np.eye(len(LABEL_COLS))[y_true]
+        macro_auc = float(roc_auc_score(onehot, probs, average="macro"))
+        micro_auc = float(roc_auc_score(onehot.ravel(), probs.ravel()))
     return {
+        "macro_auc": macro_auc,
+        "micro_auc": micro_auc,
         "accuracy": float((y_true == y_pred).mean()),
         "balanced_accuracy": float(rec[present].mean()),
         "macro_f1": float(f1[present].mean()),
@@ -267,6 +321,8 @@ def main() -> None:
     print(f"Seed      : {args.seed} (split seed {split_seed})")
     print(f"Imbalance : {args.imbalance}")
     print(f"Train frac: {args.train_frac}")
+    print(f"Img size  : {args.img_size}   LoRA rank: {args.lora_rank}")
+    print(f"Aug       : {args.aug}   label smoothing: {args.label_smoothing}")
     print(f"Run name  : {run_name}")
 
     # ── data ─────────────────────────────────────────────────────────────
@@ -276,14 +332,31 @@ def main() -> None:
     if debug:
         labeled_df = labeled_df.head(DEBUG_SAMPLES)
 
-    train_df, val_df, test_df = make_splits(
-        labeled_df, args.val_frac, args.test_frac, seed=split_seed
-    )
-    if args.train_frac < 1.0:
-        train_df = subsample_stratified(train_df, args.train_frac, seed=split_seed)
-        print(f"Low-label setting: keeping {args.train_frac:.0%} of the training split")
+    if args.final:
+        # Leaderboard mode: every labeled image is used for training.
+        train_df, val_df, test_df = labeled_df, None, None
+        print("FINAL mode: training on all labeled images, no holdout evaluation")
+    else:
+        groups = load_groups(labeled_df, args.group_csv) if args.group_csv else None
+        if groups is not None:
+            print(f"Group-aware split using {args.group_csv} "
+                  f"({len(set(groups.tolist()))} groups)")
+        train_df, val_df, test_df = make_splits(
+            labeled_df, args.val_frac, args.test_frac, seed=split_seed, groups=groups
+        )
+        if args.train_frac < 1.0:
+            train_df = subsample_stratified(train_df, args.train_frac, seed=split_seed)
+            print(f"Low-label setting: keeping {args.train_frac:.0%} of the training split")
+    if args.pseudo_csv:
+        pseudo_df = load_pseudo(
+            args.pseudo_csv, args.pseudo_thresh, args.pseudo_max_per_class,
+            args.pseudo_img_dir or IMG_DIR,
+        )
+        print(f"Pseudo-labels: +{len(pseudo_df)} images  {class_counts(pseudo_df)}")
+        train_df = pd.concat([train_df, pseudo_df], ignore_index=True)
     for name, part in (("train", train_df), ("val", val_df), ("test", test_df)):
-        print(f"{name:<5} split: {len(part):>5}  {class_counts(part)}")
+        if part is not None:
+            print(f"{name:<5} split: {len(part):>5}  {class_counts(part)}")
 
     sampler = None
     if args.imbalance == "sampler":
@@ -296,21 +369,25 @@ def main() -> None:
         )
 
     train_loader = build_loader(
-        train_df, IMG_DIR, get_train_transforms(), batch_size,
+        train_df, IMG_DIR, get_train_transforms(args.img_size, strong=args.aug == "strong"), batch_size,
         sampler=sampler, num_workers=args.num_workers,
     )
     eval_bs = max(batch_size, 32)
-    val_loader = build_loader(
-        val_df, IMG_DIR, get_eval_transforms(), eval_bs,
-        shuffle=False, num_workers=args.num_workers,
-    )
-    test_loader = build_loader(
-        test_df, IMG_DIR, get_eval_transforms(), eval_bs,
-        shuffle=False, num_workers=args.num_workers,
-    )
+    if not args.final:
+        val_loader = build_loader(
+            val_df, IMG_DIR, get_eval_transforms(args.img_size), eval_bs,
+            shuffle=False, num_workers=args.num_workers,
+        )
+        test_loader = build_loader(
+            test_df, IMG_DIR, get_eval_transforms(args.img_size), eval_bs,
+            shuffle=False, num_workers=args.num_workers,
+        )
 
     # ── model ────────────────────────────────────────────────────────────
-    model = DFUDinoLoRA(pretrained_lora_path=args.pretrained_lora_path)
+    model = DFUDinoLoRA(
+        pretrained_lora_path=args.pretrained_lora_path,
+        lora_rank=args.lora_rank, lora_alpha=2 * args.lora_rank,
+    )
     model.to(device)
     model.print_trainable_parameters()
     trainable = {n for n, p in model.named_parameters() if p.requires_grad}
@@ -322,7 +399,9 @@ def main() -> None:
         weight_decay=DEFAULT_WEIGHT_DECAY,
     )
     ce_weight = class_weights(train_df).to(device) if args.imbalance == "weights" else None
-    ce_criterion = nn.CrossEntropyLoss(weight=ce_weight)
+    ce_criterion = nn.CrossEntropyLoss(
+        weight=ce_weight, label_smoothing=args.label_smoothing
+    )
     con_criterion = SupConLoss()
 
     os.makedirs("checkpoints", exist_ok=True)
@@ -338,6 +417,14 @@ def main() -> None:
         metrics = train_one_epoch(
             model, train_loader, optimizer, ce_criterion, con_criterion, device
         )
+        if args.final:
+            print(
+                f"Epoch {epoch:>3}/{epochs}  loss={metrics['loss']:.4f}  "
+                f"ce={metrics['ce_loss']:.4f}  con={metrics['con_loss']:.4f}  "
+                f"train_acc={metrics['accuracy']:.3f}  ({time.time() - t0:.1f}s)"
+            )
+            history.append({"epoch": epoch, "train": metrics})
+            continue
         val = evaluate(model, val_loader, device)
         elapsed = time.time() - t0
         print(
@@ -360,6 +447,23 @@ def main() -> None:
                 best_path,
             )
 
+    if args.final:
+        final_path = os.path.join("checkpoints", f"{run_name}_final.pt")
+        torch.save(
+            {k: v.detach().cpu() for k, v in model.state_dict().items() if k in trainable},
+            final_path,
+        )
+        result = {
+            "run_name": run_name, "arm": arm, "mode": "final",
+            "config": {**vars(args), "epochs": epochs, "batch_size": batch_size},
+            "train_size": len(train_df), "train_class_counts": class_counts(train_df),
+            "history": history, "train_seconds": time.time() - t_start,
+        }
+        with open(os.path.join(args.out_dir, f"{run_name}_final.json"), "w") as f:
+            json.dump(result, f, indent=2)
+        print(f"\nFinal weights → {final_path}")
+        return
+
     # ── final evaluation on the held-out test split ──────────────────────
     # Last-epoch model: needs no validation labels for model selection, which
     # matters in the low-label setting (the val split stays full-size).
@@ -369,7 +473,8 @@ def main() -> None:
     print(f"\nBest epoch {best_epoch} (val macro-F1 {best_f1:.4f}) → test:")
     print(
         f"  acc={test['accuracy']:.3f}  bal_acc={test['balanced_accuracy']:.3f}  "
-        f"macro_f1={test['macro_f1']:.4f}"
+        f"macro_f1={test['macro_f1']:.4f}  macro_auc="
+        + (f"{test['macro_auc']:.4f}" if test["macro_auc"] is not None else "n/a")
     )
     print(f"  last epoch ({epochs}): macro_f1={test_last['macro_f1']:.4f}  "
           f"acc={test_last['accuracy']:.3f}")
