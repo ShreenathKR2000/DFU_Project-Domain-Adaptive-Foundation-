@@ -7,6 +7,7 @@ Everything else in the backbone stays frozen.
 
 from __future__ import annotations
 
+import os
 from typing import Optional
 
 import torch
@@ -50,7 +51,7 @@ class DFUDinoLoRA(nn.Module):
 
     def __init__(
         self,
-        model_name = "facebook/dinov2-base",
+        model_name = os.environ.get("DFU_MODEL", "facebook/dinov2-base"),
         num_classes: int = NUM_CLASSES,
         lora_rank: int = 16,
         lora_alpha: int = 32,
