@@ -99,6 +99,21 @@ def parse_args() -> argparse.Namespace:
              "subset for every run sharing --split_seed). Val/test are unchanged.",
     )
     parser.add_argument(
+        "--img_size", type=int, default=224,
+        help="Input resolution (multiple of 14). DINOv2 interpolates its position "
+             "embeddings; cost grows roughly with (size/224)^2.",
+    )
+    parser.add_argument(
+        "--lora_rank", type=int, default=16,
+        help="LoRA rank (alpha = 2 x rank). Must match the Phase-1 checkpoint.",
+    )
+    parser.add_argument(
+        "--final", action="store_true",
+        help="Leaderboard mode: train on ALL labeled images (no val/test holdout) for "
+             "a fixed --epochs and save the last-epoch weights to "
+             "checkpoints/<run_name>_final.pt. Pick --epochs from held-out runs first.",
+    )
+    parser.add_argument(
         "--imbalance", choices=["none", "weights", "sampler"], default="none",
         help="Class-imbalance handling: inverse-frequency CE weights, or a "
              "class-balanced sampler.",
@@ -214,9 +229,11 @@ def evaluate(
         logits, _ = model(images.to(device))
         preds.append(logits.argmax(dim=1).cpu())
         targets.append(labels)
-    y_pred = torch.cat(preds).numpy()
-    y_true = torch.cat(targets).numpy()
+    return compute_metrics(torch.cat(targets).numpy(), torch.cat(preds).numpy())
 
+
+def compute_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict:
+    """Accuracy, macro-F1, per-class precision/recall/F1 and confusion matrix."""
     ids = list(range(len(LABEL_COLS)))
     prec, rec, f1, support = precision_recall_fscore_support(
         y_true, y_pred, labels=ids, zero_division=0
@@ -267,6 +284,7 @@ def main() -> None:
     print(f"Seed      : {args.seed} (split seed {split_seed})")
     print(f"Imbalance : {args.imbalance}")
     print(f"Train frac: {args.train_frac}")
+    print(f"Img size  : {args.img_size}   LoRA rank: {args.lora_rank}")
     print(f"Run name  : {run_name}")
 
     # ── data ─────────────────────────────────────────────────────────────
@@ -276,14 +294,20 @@ def main() -> None:
     if debug:
         labeled_df = labeled_df.head(DEBUG_SAMPLES)
 
-    train_df, val_df, test_df = make_splits(
-        labeled_df, args.val_frac, args.test_frac, seed=split_seed
-    )
-    if args.train_frac < 1.0:
-        train_df = subsample_stratified(train_df, args.train_frac, seed=split_seed)
-        print(f"Low-label setting: keeping {args.train_frac:.0%} of the training split")
+    if args.final:
+        # Leaderboard mode: every labeled image is used for training.
+        train_df, val_df, test_df = labeled_df, None, None
+        print("FINAL mode: training on all labeled images, no holdout evaluation")
+    else:
+        train_df, val_df, test_df = make_splits(
+            labeled_df, args.val_frac, args.test_frac, seed=split_seed
+        )
+        if args.train_frac < 1.0:
+            train_df = subsample_stratified(train_df, args.train_frac, seed=split_seed)
+            print(f"Low-label setting: keeping {args.train_frac:.0%} of the training split")
     for name, part in (("train", train_df), ("val", val_df), ("test", test_df)):
-        print(f"{name:<5} split: {len(part):>5}  {class_counts(part)}")
+        if part is not None:
+            print(f"{name:<5} split: {len(part):>5}  {class_counts(part)}")
 
     sampler = None
     if args.imbalance == "sampler":
@@ -296,21 +320,25 @@ def main() -> None:
         )
 
     train_loader = build_loader(
-        train_df, IMG_DIR, get_train_transforms(), batch_size,
+        train_df, IMG_DIR, get_train_transforms(args.img_size), batch_size,
         sampler=sampler, num_workers=args.num_workers,
     )
     eval_bs = max(batch_size, 32)
-    val_loader = build_loader(
-        val_df, IMG_DIR, get_eval_transforms(), eval_bs,
-        shuffle=False, num_workers=args.num_workers,
-    )
-    test_loader = build_loader(
-        test_df, IMG_DIR, get_eval_transforms(), eval_bs,
-        shuffle=False, num_workers=args.num_workers,
-    )
+    if not args.final:
+        val_loader = build_loader(
+            val_df, IMG_DIR, get_eval_transforms(args.img_size), eval_bs,
+            shuffle=False, num_workers=args.num_workers,
+        )
+        test_loader = build_loader(
+            test_df, IMG_DIR, get_eval_transforms(args.img_size), eval_bs,
+            shuffle=False, num_workers=args.num_workers,
+        )
 
     # ── model ────────────────────────────────────────────────────────────
-    model = DFUDinoLoRA(pretrained_lora_path=args.pretrained_lora_path)
+    model = DFUDinoLoRA(
+        pretrained_lora_path=args.pretrained_lora_path,
+        lora_rank=args.lora_rank, lora_alpha=2 * args.lora_rank,
+    )
     model.to(device)
     model.print_trainable_parameters()
     trainable = {n for n, p in model.named_parameters() if p.requires_grad}
@@ -338,6 +366,14 @@ def main() -> None:
         metrics = train_one_epoch(
             model, train_loader, optimizer, ce_criterion, con_criterion, device
         )
+        if args.final:
+            print(
+                f"Epoch {epoch:>3}/{epochs}  loss={metrics['loss']:.4f}  "
+                f"ce={metrics['ce_loss']:.4f}  con={metrics['con_loss']:.4f}  "
+                f"train_acc={metrics['accuracy']:.3f}  ({time.time() - t0:.1f}s)"
+            )
+            history.append({"epoch": epoch, "train": metrics})
+            continue
         val = evaluate(model, val_loader, device)
         elapsed = time.time() - t0
         print(
@@ -359,6 +395,23 @@ def main() -> None:
                 {k: v.detach().cpu() for k, v in model.state_dict().items() if k in trainable},
                 best_path,
             )
+
+    if args.final:
+        final_path = os.path.join("checkpoints", f"{run_name}_final.pt")
+        torch.save(
+            {k: v.detach().cpu() for k, v in model.state_dict().items() if k in trainable},
+            final_path,
+        )
+        result = {
+            "run_name": run_name, "arm": arm, "mode": "final",
+            "config": {**vars(args), "epochs": epochs, "batch_size": batch_size},
+            "train_size": len(train_df), "train_class_counts": class_counts(train_df),
+            "history": history, "train_seconds": time.time() - t_start,
+        }
+        with open(os.path.join(args.out_dir, f"{run_name}_final.json"), "w") as f:
+            json.dump(result, f, indent=2)
+        print(f"\nFinal weights → {final_path}")
+        return
 
     # ── final evaluation on the held-out test split ──────────────────────
     # Last-epoch model: needs no validation labels for model selection, which

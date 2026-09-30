@@ -34,7 +34,9 @@ def load_results(directory: str) -> list[dict]:
     paths = sorted(glob.glob(os.path.join(directory, "*.json")))
     results = [json.load(open(p)) for p in paths]
     # Debug runs (20 images) would pollute the statistics.
-    return [r for r in results if not r["config"].get("debug")]
+    # and --final runs (trained on everything, no test metrics) have nothing to compare.
+    return [r for r in results
+            if not r["config"].get("debug") and r.get("mode") != "final"]
 
 
 def frac_of(r: dict) -> float:

@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Project history at a glance
+
+| Stage | Versions | What happened |
+|---|---|---|
+| Initial state | 0.1.0 – 0.3.0 (Feb–Mar 2026) | DINOv2 + LoRA classifier, SimMIM pre-training (Phase 1) and the Phase 1 → 2 bridge, verified only with 20-image debug runs on a GTX 1650 (4 GB). Evidence for the method was a "+5 pp" debug comparison. |
+| Move to an HPC GPU (L40S) | 0.4.0 | Proper held-out evaluation (stratified train/val/test, macro-F1, per-class recall, confusion matrix), class-imbalance options, seeds, Slurm scripts, scratch-vs-pretrained summary. |
+| Bug found by the new checks | 0.4.1 | With older peft the Phase-1 LoRA weights were silently not applied, so every earlier "pretrained" run equalled scratch (the debug "+5 pp" was noise). Fixed; loading is now verified. |
+| First real result | 0.4.x | 3 seeds x 2 arms on ~4,100 labeled images: scratch 0.880 ± 0.017 vs pretrained 0.870 ± 0.010 test macro-F1 — **no measurable benefit of Phase 1 at full labels**. |
+| Label-efficiency study | 0.5.0 | `--train_frac`, grouped summary, CSV + plot, to test whether Phase 1 helps when labels are scarce. |
+| Towards a leaderboard | 0.6.0 | Higher resolution, LoRA rank, extra unlabeled data for Phase 1 (e.g. DFUC2020), train-on-everything mode, ensemble + TTA inference and a submission-style CSV. |
+
+## [0.6.0] - 2026-09-30
+
+### Added
+
+- `src/predict.py` — inference with flip test-time augmentation and
+  checkpoint ensembling. Evaluates on a held-out split (`--split val|test`, to
+  measure what TTA/ensembling buy) or predicts an image folder (`--img_dir`) and
+  writes `predictions.csv` (one-hot, train.csv schema) and `*_probs.csv`.
+- `src/train.py` — `--final` (train on all labeled images for a fixed number of
+  epochs, save `checkpoints/<run>_final.pt`), `--img_size` (multiple of 14),
+  `--lora_rank`; `compute_metrics` factored out of `evaluate`.
+- `src/pretrain.py` — `--extra_img_dirs` (add further unlabeled images such as
+  DFUC2020 to Phase 1), `--img_size`, `--lora_rank`.
+- README — leaderboard workflow and notes on using DFUC2020/2021 data.
+
+### Changed
+
+- `src/summarize.py` skips `--final` runs.
+
+### Verified
+
+- Synthetic-data smoke test (tiny random DINOv2, old and new peft/transformers):
+  extra-directory pre-training, `--img_size 126`, `--final`, 2-checkpoint
+  ensemble + TTA, CSV output, `--lora_rank 8`. Not yet run on the real data.
+
 ## [0.5.0] - 2026-09-30
 
 ### Added
@@ -19,6 +55,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `results/label_efficiency.png` (macro-F1 vs. label fraction).
 - README — full-label results (3 seeds: no significant benefit from Phase 1),
   low-label protocol, ideas for further study, notes on DFUC challenges.
+
+## [0.4.1] - 2026-09-30
+
+### Fixed
+
+- `src/model.py` — with older peft versions (e.g. 0.13), `set_peft_model_state_dict`
+  silently ignored every Phase-1 LoRA tensor, so "pretrained" runs were
+  actually identical to scratch (the debug comparison in 0.3.0 is therefore not
+  evidence for the method). The checkpoint is now loaded directly with
+  `load_state_dict`; `set_peft_model_state_dict` is only a fallback.
+- `src/summarize.py` — ignores `--debug` result files (a leftover debug run had
+  been counted as a scratch run).
 
 ## [0.4.0] - 2026-09-30
 
@@ -38,21 +86,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `slurm/pretrain.sbatch`, `slurm/train_array.sbatch` — Slurm scripts
   (Phase 1; 3 seeds x 2 arms job array).
 
-### Fixed
-
-- `src/model.py` — with older peft versions (e.g. 0.13), `set_peft_model_state_dict`
-  silently ignored every Phase-1 LoRA tensor, so "pretrained" runs were
-  actually identical to scratch (the earlier debug comparison in 0.3.0 is
-  therefore not evidence for the method). The checkpoint is now loaded
-  directly with `load_state_dict`; `set_peft_model_state_dict` is only a fallback.
-
-- `src/summarize.py` — ignores `--debug` result files.
-
 ### Changed
 
-- `src/model.py` — loading Phase-1 LoRA weights now fails loudly if no LoRA
-  tensors are found or the load was silently ignored (all `lora_B` still
-  zero); LoRA target names adapt to `transformers` 5.x (`q_proj`/`v_proj`).
+- `src/model.py` — loading Phase-1 LoRA weights fails loudly if no LoRA tensors
+  are found or the load was silently ignored (all `lora_B` still zero); LoRA
+  target names adapt to `transformers` 5.x (`q_proj`/`v_proj`).
 - `src/pretrain.py` — `--seed`, `--num_workers`.
 - `src/train.py` no longer saves `dfu_dino_lora.pt`; see `*_best.pt` above.
 
