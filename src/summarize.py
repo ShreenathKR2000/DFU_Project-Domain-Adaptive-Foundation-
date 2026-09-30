@@ -22,7 +22,9 @@ from src.dataset import LABEL_COLS
 
 def load_results(directory: str) -> list[dict]:
     paths = sorted(glob.glob(os.path.join(directory, "*.json")))
-    return [json.load(open(p)) for p in paths]
+    results = [json.load(open(p)) for p in paths]
+    # Debug runs (20 images) would pollute the statistics.
+    return [r for r in results if not r["config"].get("debug")]
 
 
 def mean_std(values: list[float]) -> str:

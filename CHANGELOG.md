@@ -31,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   therefore not evidence for the method). The checkpoint is now loaded
   directly with `load_state_dict`; `set_peft_model_state_dict` is only a fallback.
 
+- `src/summarize.py` — ignores `--debug` result files.
+
 ### Changed
 
 - `src/model.py` — loading Phase-1 LoRA weights now fails loudly if no LoRA
