@@ -77,6 +77,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--batch_size", type=int,   default=None)
     p.add_argument("--lr",         type=float, default=DEFAULT_LR)
     p.add_argument("--mask_ratio", type=float, default=DEFAULT_MASK_RATIO)
+    p.add_argument("--seed",        type=int,   default=0)
+    p.add_argument("--num_workers", type=int,   default=2)
     p.add_argument(
         "--loss_fn", choices=["l1", "mse"], default="l1",
         help="Reconstruction loss function (default: l1).",
@@ -87,14 +89,15 @@ def parse_args() -> argparse.Namespace:
 # ── data ─────────────────────────────────────────────────────────────────────
 
 def build_loader(
-    df, img_dir: str, transform, batch_size: int, shuffle: bool = True
+    df, img_dir: str, transform, batch_size: int, shuffle: bool = True,
+    num_workers: int = 2,
 ) -> DataLoader:
     ds = DFUDataset(df, img_dir, transform=transform)
     return DataLoader(
         ds,
         batch_size=batch_size,
         shuffle=shuffle,
-        num_workers=2,
+        num_workers=num_workers,
         pin_memory=True,
     )
 
@@ -138,6 +141,7 @@ def main() -> None:
     batch_size = args.batch_size or (DEBUG_BATCH_SIZE  if debug else DEFAULT_BATCH_SIZE)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    torch.manual_seed(args.seed)
 
     print(f"{'─' * 60}")
     print(f"  SimMIM Pre-training  (Domain-Adaptive Phase 1)")
@@ -158,7 +162,8 @@ def main() -> None:
         print(f"Debug subset   : {len(unlabeled_df)} images")
 
     loader = build_loader(
-        unlabeled_df, IMG_DIR, get_train_transforms(), batch_size
+        unlabeled_df, IMG_DIR, get_train_transforms(), batch_size,
+        num_workers=args.num_workers,
     )
 
     # ── model ────────────────────────────────────────────────────────────
