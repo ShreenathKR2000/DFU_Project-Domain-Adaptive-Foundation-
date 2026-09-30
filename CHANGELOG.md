@@ -23,6 +23,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `slurm/pretrain.sbatch`, `slurm/train_array.sbatch` — Slurm scripts
   (Phase 1; 3 seeds x 2 arms job array).
 
+### Fixed
+
+- `src/model.py` — with older peft versions (e.g. 0.13), `set_peft_model_state_dict`
+  silently ignored every Phase-1 LoRA tensor, so "pretrained" runs were
+  actually identical to scratch (the earlier debug comparison in 0.3.0 is
+  therefore not evidence for the method). The checkpoint is now loaded
+  directly with `load_state_dict`; `set_peft_model_state_dict` is only a fallback.
+
 ### Changed
 
 - `src/model.py` — loading Phase-1 LoRA weights now fails loudly if no LoRA

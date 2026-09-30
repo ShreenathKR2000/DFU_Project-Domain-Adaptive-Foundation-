@@ -233,8 +233,9 @@ Epoch 2/2  loss=0.4085  ce=0.8170  con=0.0000  acc=0.750  (1.9 s)
 | Scratch | 70.0 % | 0.4112 |
 | Phase-1 LoRA | **75.0 %** | **0.4085** |
 
-**Observations** — Domain-adapted LoRA weights give +5 pp accuracy and lower
-final loss on the debug split. The gap is expected to grow on the full dataset.
+**Observations** — *Superseded:* with older peft versions the Phase-1 weights were
+silently not applied in these debug runs (fixed in v0.4.1), so this table only
+shows run-to-run noise on 20 images. See the evaluation protocol above.
 
 ## Cluster / HPC Deployment (Slurm)
 
