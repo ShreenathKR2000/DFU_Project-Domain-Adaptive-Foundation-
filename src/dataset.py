@@ -180,3 +180,27 @@ def make_splits(
         labeled_df.iloc[ix].reset_index(drop=True)
         for ix in (train_idx, val_idx, test_idx)
     )
+
+
+def subsample_stratified(
+    df: pd.DataFrame, frac: float, seed: int = 0
+) -> pd.DataFrame:
+    """Class-stratified random subset containing ``frac`` of ``df``.
+
+    Deterministic in ``seed`` so that different arms of an experiment train on
+    exactly the same labeled subset.  Falls back to an unstratified draw when a
+    class is too small to stratify (tiny debug subsets only).
+    """
+    from sklearn.model_selection import train_test_split
+
+    if not 0.0 < frac <= 1.0:
+        raise ValueError(f"train_frac must be in (0, 1], got {frac}")
+    if frac == 1.0:
+        return df
+    idx = np.arange(len(df))
+    y = labels_from_df(df)
+    try:
+        keep, _ = train_test_split(idx, train_size=frac, stratify=y, random_state=seed)
+    except ValueError:
+        keep, _ = train_test_split(idx, train_size=frac, random_state=seed)
+    return df.iloc[np.sort(keep)].reset_index(drop=True)
