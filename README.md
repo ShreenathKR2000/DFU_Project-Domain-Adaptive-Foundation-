@@ -55,7 +55,10 @@ DFU_Project/
 │   ├── model.py             # DFUDinoLoRA (DINOv2 + LoRA + head)
 │   ├── pretrain_model.py    # DFUDinoLoRAForMIM (MIM wrapper + decoder)
 │   ├── pretrain.py          # Phase 1: unsupervised MIM pre-training
-│   └── train.py             # Phase 2: supervised classification
+│   ├── train.py             # Phase 2: supervised classification + evaluation
+│   └── summarize.py         # scratch vs. pretrained summary / CSV / plot
+├── slurm/                   # sbatch scripts
+├── run_lowlabel.sh          # low-label experiment (one seed)
 ├── .gitignore
 ├── CHANGELOG.md
 └── README.md
@@ -168,7 +171,8 @@ python -m src.summarize        # mean ± std per arm + paired per-seed differenc
 ```
 
 Other flags: `--imbalance {none,weights,sampler}` (inverse-frequency CE weights
-or class-balanced sampling), `--num_workers`, `--val_frac`, `--test_frac`.
+or class-balanced sampling), `--train_frac` (low-label experiments, see below),
+`--num_workers`, `--val_frac`, `--test_frac`.
 Phase 1 also accepts `--seed` and `--num_workers`.
 
 Notes on interpreting results:
@@ -181,6 +185,113 @@ Notes on interpreting results:
   fall on both sides of a random split and inflate scores for *both* arms.
 - Phase 1 only uses unlabeled images, so the test split is never seen during
   pre-training.
+
+## Results
+
+### Full-label comparison (DFUC2021 train split, 3 seeds)
+
+Stratified 70/15/15 split (4,167 / 894 / 894 images), batch 32, 30 epochs,
+inverse-frequency CE weights, Phase 1 = 100 epochs of SimMIM on the 3,994
+unlabeled images (reconstruction loss 0.39 → 0.096, still slowly decreasing).
+Test numbers at the epoch with the best validation macro-F1; seeds 0/1/2 share
+splits across arms.
+
+| | scratch | Phase-1 pretrained |
+|---|---|---|
+| Test macro-F1 (per seed) | 0.898, 0.866, 0.877 | 0.859, 0.874, 0.876 |
+| **Test macro-F1 (mean ± std)** | **0.880 ± 0.017** | **0.870 ± 0.010** |
+| Test accuracy (mean) | 0.877 | 0.854 |
+| Recall none / infection | 0.875 / 0.873 | 0.839 / 0.847 |
+| Recall ischaemia / both | 0.833 / 0.917 | 0.863 / 0.946 |
+
+Paired difference (pretrained − scratch): −0.040, +0.009, −0.000 (mean −0.011).
+
+**Finding.** With ~4,100 labeled training images, Phase-1 domain-adaptive MIM
+pre-training gave **no measurable benefit** for classification: the mean
+difference is smaller than the seed-to-seed spread of the baseline (±0.017), so
+the two arms are statistically indistinguishable. The pretrained arm was
+slightly better on the rare classes (ischaemia, both; +0.03 recall each, but
+ischaemia has only 34 test images, i.e. ±1 image ≈ ±0.03) and slightly worse on
+the two large classes. The dominant error for *both* arms is `none` ↔
+`infection` confusion (~100 of ~130 errors per run). Pretrained runs also
+started lower (epoch-1 val macro-F1 ≈ 0.55–0.63 vs 0.65–0.68), suggesting Phase 1
+moved the adapters away from DINOv2's already strong semantic features.
+
+Possible reasons (untested): pixel reconstruction emphasises low-level
+colour/texture rather than semantics; 3,994 images and rank-16 Q/V LoRA is a
+small adaptation; and with thousands of labels a strong frozen backbone leaves
+little headroom for pre-training to help.
+
+*Earlier versions of this README reported a "+5 pp" debug-run gain for Phase 1;
+that was noise on 20 images (and with older peft versions the Phase-1 weights
+were silently not applied — fixed in v0.4.1).*
+
+### Low-label experiment (does Phase 1 help when labels are scarce?)
+
+Domain-adaptive pre-training is usually motivated by label scarcity, so the
+natural follow-up is to train both arms on only a fraction of the training
+labels (`--train_frac`, class-stratified, identical subset for both arms of a
+seed; validation and test splits stay full-size):
+
+```bash
+./run_lowlabel.sh 0        # one seed: 10 / 25 / 50 % × {scratch, pretrained}
+python -m src.summarize    # table per fraction, results/summary.csv, results/label_efficiency.png
+```
+
+Epochs are raised for small fractions (100 / 60 / 40 at 10 / 25 / 50 %) so each
+fraction gets a comparable number of gradient steps. `summarize` reports macro-F1
+at the best-validation epoch **and** for the last-epoch model; the latter needs no
+validation labels and is the fairer number in a low-label claim (the full-size
+validation split is otherwise a source of label information).
+Results for this experiment: *to be added*.
+
+How to read it: if pretrained beats scratch at 10 % / 25 % labels and the gap
+closes at 100 %, Phase 1 is a label-efficiency gain (claim: "reduces labeling
+needs by X×"). If the curves overlap everywhere, the honest conclusion is that
+pixel-MIM adds nothing over DINOv2 for this task.
+
+### Ideas for further study
+
+- More seeds (5+) or k-fold CV; report paired differences with confidence intervals.
+- A different Phase-1 objective: reconstruct frozen-DINOv2 patch *features*
+  (feature distillation) instead of pixels; lower mask ratio; more LoRA capacity
+  (rank, key/MLP layers, last blocks fully trained); continue Phase 1 beyond 100 epochs.
+- Self-training with the 3,994 unlabeled images (pseudo-labels from the trained
+  classifier) instead of / in addition to MIM.
+- Class-imbalance options already in `train.py` (`--imbalance sampler`), and
+  ordinal / hierarchical modelling of (none, infection, ischaemia, both) as two
+  binary flags (infection, ischaemia).
+- Patient-level splitting if patient IDs can be recovered (DFUC2021 provides none;
+  near-duplicate images across splits can inflate every number above).
+- Error analysis of the `none` ↔ `infection` confusion (Grad-CAM / attention
+  maps, clinician review).
+
+### Relation to the DFUC challenges
+
+The scores above are on a random internal split of the public DFUC2021 *training*
+images and are **not comparable** to challenge leaderboards (hidden test sets,
+different distribution, possible near-duplicate leakage here). The DFUC2021
+task was 4-class classification (official metric: macro-F1); **DFUC2022**
+(`dfuc2022.grand-challenge.org`) is, as far as I recall, a *segmentation* task
+scored by Dice — please verify the task, metric, data and external-data rules on
+the challenge page before investing. If it is segmentation, this classification
+pipeline cannot be submitted as is. Suggested adaptations:
+
+1. **Dense head on the same backbone**: DINOv2 patch tokens (16×16 at 224 px)
+   → light convolutional/DPT-style decoder with upsampling; Dice + BCE (or
+   Lovász/boundary) loss; report Dice/IoU.
+2. **Higher resolution** (e.g. 448–518 px, multiples of 14) and multi-scale /
+   flip test-time augmentation; ulcers are small structures.
+3. **Phase 1 fits dense tasks better**: MIM trains *patch-level* features, which
+   segmentation uses directly, unlike global classification; it may show gains
+   here that it did not for classification — test with `--train_frac`-style
+   label fractions on the segmentation data.
+4. **Stronger recipe**: LoRA on all linear layers with higher rank (or unfreeze
+   the last blocks), `dinov2-large`, SWA/EMA, heavy colour/scale augmentation,
+   5-fold ensembling, and pseudo-labelling of unlabeled images if the rules allow.
+5. **Evaluation discipline**: choose hyper-parameters on validation only,
+   check the rules on external data/pre-trained weights, and keep submissions
+   reproducible (fixed seeds, logged configs — already saved in `results/*.json`).
 
 ## Initial Results (Debug Runs)
 
