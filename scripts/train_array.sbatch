@@ -1,9 +1,9 @@
 #!/bin/bash
 # Phase 2 comparison: 3 seeds x {scratch, pretrained} = 6 runs as a job array.
 # Runs with the same seed use the same train/val/test split, so the two arms
-# are directly comparable.  Run Phase 1 first (slurm/pretrain.sbatch).
+# are directly comparable.  Run Phase 1 first (scripts/pretrain.sbatch).
 #
-#   sbatch --partition=<gpu-partition> slurm/train_array.sbatch
+#   sbatch --partition=<gpu-partition> scripts/train_array.sbatch
 # Afterwards:  python -m src.summarize
 #SBATCH --job-name=dfu_train
 #SBATCH --gres=gpu:1

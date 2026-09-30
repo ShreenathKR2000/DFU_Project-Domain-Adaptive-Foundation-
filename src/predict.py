@@ -45,8 +45,9 @@ from src.dataset import (
     load_groups,
     make_splits,
 )
+from src.common import CSV_PATH, IMG_DIR
+from src.metrics import compute_metrics
 from src.model import DFUDinoLoRA
-from src.train import CSV_PATH, IMG_DIR, compute_metrics
 
 
 def parse_args() -> argparse.Namespace:
