@@ -44,6 +44,7 @@ from src.dataset import (
     get_train_transforms,
     labels_from_df,
     load_and_split_csv,
+    load_groups,
     make_splits,
     subsample_stratified,
 )
@@ -107,6 +108,16 @@ def parse_args() -> argparse.Namespace:
         "--lora_rank", type=int, default=16,
         help="LoRA rank (alpha = 2 x rank). Must match the Phase-1 checkpoint.",
     )
+    parser.add_argument(
+        "--group_csv", type=str, default=None,
+        help="image,group CSV from `python -m src.make_groups`; keeps near-duplicate "
+             "images in the same split (leak-free validation/test).",
+    )
+    parser.add_argument(
+        "--aug", choices=["basic", "strong"], default="basic",
+        help="Training augmentation strength.",
+    )
+    parser.add_argument("--label_smoothing", type=float, default=0.0)
     parser.add_argument(
         "--final", action="store_true",
         help="Leaderboard mode: train on ALL labeled images (no val/test holdout) for "
@@ -285,6 +296,7 @@ def main() -> None:
     print(f"Imbalance : {args.imbalance}")
     print(f"Train frac: {args.train_frac}")
     print(f"Img size  : {args.img_size}   LoRA rank: {args.lora_rank}")
+    print(f"Aug       : {args.aug}   label smoothing: {args.label_smoothing}")
     print(f"Run name  : {run_name}")
 
     # ── data ─────────────────────────────────────────────────────────────
@@ -299,8 +311,12 @@ def main() -> None:
         train_df, val_df, test_df = labeled_df, None, None
         print("FINAL mode: training on all labeled images, no holdout evaluation")
     else:
+        groups = load_groups(labeled_df, args.group_csv) if args.group_csv else None
+        if groups is not None:
+            print(f"Group-aware split using {args.group_csv} "
+                  f"({len(set(groups.tolist()))} groups)")
         train_df, val_df, test_df = make_splits(
-            labeled_df, args.val_frac, args.test_frac, seed=split_seed
+            labeled_df, args.val_frac, args.test_frac, seed=split_seed, groups=groups
         )
         if args.train_frac < 1.0:
             train_df = subsample_stratified(train_df, args.train_frac, seed=split_seed)
@@ -320,7 +336,7 @@ def main() -> None:
         )
 
     train_loader = build_loader(
-        train_df, IMG_DIR, get_train_transforms(args.img_size), batch_size,
+        train_df, IMG_DIR, get_train_transforms(args.img_size, strong=args.aug == "strong"), batch_size,
         sampler=sampler, num_workers=args.num_workers,
     )
     eval_bs = max(batch_size, 32)
@@ -350,7 +366,9 @@ def main() -> None:
         weight_decay=DEFAULT_WEIGHT_DECAY,
     )
     ce_weight = class_weights(train_df).to(device) if args.imbalance == "weights" else None
-    ce_criterion = nn.CrossEntropyLoss(weight=ce_weight)
+    ce_criterion = nn.CrossEntropyLoss(
+        weight=ce_weight, label_smoothing=args.label_smoothing
+    )
     con_criterion = SupConLoss()
 
     os.makedirs("checkpoints", exist_ok=True)

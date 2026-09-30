@@ -14,7 +14,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | Bug found by the new checks | 0.4.1 | With older peft the Phase-1 LoRA weights were silently not applied, so every earlier "pretrained" run equalled scratch (the debug "+5 pp" was noise). Fixed; loading is now verified. |
 | First real result | 0.4.x | 3 seeds x 2 arms on ~4,100 labeled images: scratch 0.880 ± 0.017 vs pretrained 0.870 ± 0.010 test macro-F1 — **no measurable benefit of Phase 1 at full labels**. |
 | Label-efficiency study | 0.5.0 | `--train_frac`, grouped summary, CSV + plot, to test whether Phase 1 helps when labels are scarce. |
+| Leaderboard reality check | 0.7.0 | Live DFUC2021 leaderboard: top ≈ 0.65 / rank ~50 ≈ 0.55 macro-F1 vs 0.88 internally, so the random split leaks near-duplicates. Added near-duplicate grouping, group-aware splits, stronger augmentation and label smoothing. |
 | Towards a leaderboard | 0.6.0 | Higher resolution, LoRA rank, extra unlabeled data for Phase 1 (e.g. DFUC2020), train-on-everything mode, ensemble + TTA inference and a submission-style CSV. |
+
+## [0.7.0] - 2026-09-30
+
+### Added
+
+- `src/make_groups.py` — embeds labeled images with frozen DINOv2, clusters
+  near-duplicates (cosine threshold, connected components), writes `groups.csv`
+  and prints a leak diagnostic (share of test images with a near-duplicate in
+  train under random vs. group-aware splits).
+- `src/dataset.py` — `load_groups`; `make_splits(..., groups=...)` uses
+  `StratifiedGroupKFold` so each group stays in one split; `get_train_transforms(strong=True)`.
+- `src/train.py`, `src/predict.py` — `--group_csv`; `src/train.py` — `--aug {basic,strong}`,
+  `--label_smoothing`.
+
+### Verified
+
+- Synthetic check: 120 clusters of 6 near-duplicates recovered exactly; random
+  split leaked 100 % of test images, group-aware split 0 %. Not yet run on the
+  real data.
 
 ## [0.6.0] - 2026-09-30
 
