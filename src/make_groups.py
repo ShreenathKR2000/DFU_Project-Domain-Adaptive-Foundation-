@@ -72,7 +72,12 @@ def leak_rate(sim: np.ndarray, train_idx: np.ndarray, test_idx: np.ndarray, thr:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--threshold", type=float, default=0.90)
-    ap.add_argument("--model_name", default="facebook/dinov2-base")
+    ap.add_argument("--auto", action="store_true",
+                    help="Pick the lowest threshold from 0.80/0.85/0.90/0.95/0.98 whose "
+                         "largest cluster is at most --max_group_frac of the images "
+                         "(guards against one giant merged cluster).")
+    ap.add_argument("--max_group_frac", type=float, default=0.02)
+    ap.add_argument("--model_name", default=os.environ.get("DFU_MODEL", "facebook/dinov2-base"))
     ap.add_argument("--batch_size", type=int, default=64)
     ap.add_argument("--num_workers", type=int, default=4)
     ap.add_argument("--seed", type=int, default=0)
@@ -92,9 +97,18 @@ def main() -> None:
         sizes = np.bincount(g)
         print(f"  {thr:.2f}     {len(sizes):>6}   {sizes.max():>7}   {int(sizes[sizes > 1].sum()):>8}")
 
-    groups = cluster(sim, args.threshold)
+    threshold = args.threshold
+    if args.auto:
+        limit = max(50, int(args.max_group_frac * len(labeled_df)))
+        candidates = (0.80, 0.85, 0.90, 0.95, 0.98)
+        threshold = next(
+            (t for t in candidates if np.bincount(cluster(sim, t)).max() <= limit),
+            candidates[-1],
+        )
+        print(f"\n--auto: largest allowed cluster {limit} images -> threshold {threshold}")
+    groups = cluster(sim, threshold)
     sizes = np.bincount(groups)
-    print(f"\nUsing threshold {args.threshold}: {len(sizes)} groups, largest {sizes.max()}")
+    print(f"\nUsing threshold {threshold}: {len(sizes)} groups, largest {sizes.max()}")
     pd.DataFrame({"image": labeled_df["image"], "group": groups}).to_csv(args.out, index=False)
     print(f"Groups → {args.out}")
 

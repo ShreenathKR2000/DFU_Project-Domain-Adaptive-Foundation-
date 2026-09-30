@@ -72,6 +72,7 @@ Cluster / Slurm / VS Code instructions: [docs/CLUSTER.md](docs/CLUSTER.md).
 | Phase 2 training + held-out evaluation | `python -m src.train [--pretrained_lora_path ...]` |
 | Leak-free split (near-duplicate groups) | `python -m src.make_groups` then `--group_csv groups.csv` |
 | Regularisation for shift | `--aug strong --label_smoothing 0.1` |
+| **Everything in one go (~90 min GPU window)** | `nohup bash scripts/run_all_experiments.sh > logs/all.log 2>&1 &` |
 | Low-label study (10/25/50 % labels) | `./scripts/run_lowlabel.sh <seed>` |
 | Pseudo-labelling (teachers → student) | `GROUP_CSV=groups.csv ./scripts/run_pseudo.sh <split_seed>` |
 | Compare runs (leaderboard-style table, CSV, plot) | `python -m src.summarize` |

@@ -11,13 +11,20 @@ from torch.utils.data import DataLoader
 
 from src.dataset import DFUDataset
 
-# Paths (relative to the project root)
-DATA_DIR = os.path.join("Data", "DFUC2021_train")
+# Paths (relative to the project root); override the data location with DFU_DATA_DIR
+DATA_DIR = os.environ.get("DFU_DATA_DIR", os.path.join("Data", "DFUC2021_train"))
 CSV_PATH = os.path.join(DATA_DIR, "train.csv")
 IMG_DIR = os.path.join(DATA_DIR, "images")
 
 
+def enable_tf32() -> None:
+    """TF32 matmuls on Ampere/Ada GPUs: much faster fp32, negligible accuracy impact."""
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
+
+
 def set_seed(seed: int) -> None:
+    enable_tf32()
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
