@@ -38,7 +38,7 @@ import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 
-from src.common import CSV_PATH, IMG_DIR, build_loader
+from src.common import CSV_PATH, IMG_DIR, build_loader, enable_tf32
 from src.dataset import get_train_transforms, load_and_split_csv
 from src.pretrain_model import DFUDinoLoRAForMIM
 
@@ -80,6 +80,8 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument("--lora_rank",   type=int,   default=16,
                    help="LoRA rank (alpha = 2 x rank).")
+    p.add_argument("--amp", action="store_true",
+                   help="bfloat16 autocast on CUDA (faster).")
     p.add_argument("--seed",        type=int,   default=0)
     p.add_argument("--num_workers", type=int,   default=2)
     p.add_argument(
@@ -98,6 +100,7 @@ def train_one_epoch(
     loader: DataLoader,
     optimizer: torch.optim.Optimizer,
     device: torch.device,
+    amp: bool = False,
 ) -> dict[str, float]:
     model.train()
     total_loss = 0.0
@@ -108,7 +111,9 @@ def train_one_epoch(
         images = batch[0] if isinstance(batch, (list, tuple)) else batch
         images = images.to(device)
 
-        loss, _pred, _mask = model(images)
+        with torch.autocast(device.type, dtype=torch.bfloat16, enabled=amp):
+            loss, _pred, _mask = model(images)
+        loss = loss.float()
 
         optimizer.zero_grad()
         loss.backward()
@@ -131,6 +136,8 @@ def main() -> None:
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     torch.manual_seed(args.seed)
+    enable_tf32()
+    amp = args.amp and device.type == "cuda"
 
     print(f"{'─' * 60}")
     print(f"  SimMIM Pre-training  (Domain-Adaptive Phase 1)")
@@ -194,7 +201,7 @@ def main() -> None:
     # ── training loop ────────────────────────────────────────────────────
     for epoch in range(1, epochs + 1):
         t0 = time.time()
-        metrics = train_one_epoch(model, loader, optimizer, device)
+        metrics = train_one_epoch(model, loader, optimizer, device, amp=amp)
         elapsed = time.time() - t0
         print(
             f"Epoch {epoch:>3}/{epochs}  "

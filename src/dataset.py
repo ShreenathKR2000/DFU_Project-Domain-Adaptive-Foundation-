@@ -30,6 +30,9 @@ from torchvision import transforms
 
 LABEL_COLS = ["none", "infection", "ischaemia", "both"]
 
+# DFUC2021: the first 5,955 rows of train.csv are labeled (DFU_N_LABELED overrides, for tests)
+DEFAULT_N_LABELED = int(os.environ.get("DFU_N_LABELED", 5955))
+
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD = [0.229, 0.224, 0.225]
 
@@ -128,7 +131,7 @@ class DFUDataset(Dataset):
 # ── helper: split CSV into labeled / unlabeled frames ────────────────────────
 
 def load_and_split_csv(
-    csv_path: str, n_labeled: int = 5955
+    csv_path: str, n_labeled: int = DEFAULT_N_LABELED
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Return ``(labeled_df, unlabeled_df)`` from the raw train.csv."""
     df = pd.read_csv(csv_path)
@@ -204,8 +207,9 @@ def make_splits(
                 cv = StratifiedGroupKFold(n_splits=n, shuffle=True, random_state=seed)
                 rest, held = next(cv.split(ix, yy, groups[ix]))
                 return ix[rest], ix[held]
-            except ValueError:
-                pass
+            except ValueError as e:
+                print(f"WARNING: group-aware split failed ({e}); falling back to a "
+                      "random split — results will NOT be leak-free!")
         try:
             return train_test_split(ix, test_size=frac, stratify=yy, random_state=seed)
         except ValueError:

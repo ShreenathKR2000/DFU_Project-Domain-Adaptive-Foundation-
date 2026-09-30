@@ -81,6 +81,8 @@ def parse_args() -> argparse.Namespace:
                         "class-balanced sampler.")
     g.add_argument("--aug", choices=["basic", "strong"], default="basic",
                    help="Training augmentation strength.")
+    g.add_argument("--amp", action="store_true",
+                   help="bfloat16 autocast on CUDA (faster; losses stay in fp32).")
 
     g = p.add_argument_group("model")
     g.add_argument("--pretrained_lora_path", type=str, default=None,
@@ -136,6 +138,7 @@ def train_one_epoch(
     con_criterion: SupConLoss,
     device: torch.device,
     contrastive_weight: float = CONTRASTIVE_WEIGHT,
+    amp: bool = False,
 ) -> dict[str, float]:
     model.train()
     total_loss = total_ce = total_con = 0.0
@@ -143,7 +146,9 @@ def train_one_epoch(
 
     for images, labels in loader:
         images, labels = images.to(device), labels.to(device)
-        logits, embeddings = model(images)
+        with torch.autocast(device.type, dtype=torch.bfloat16, enabled=amp):
+            logits, embeddings = model(images)
+        logits, embeddings = logits.float(), embeddings.float()
 
         ce_loss = ce_criterion(logits, labels)
         # Supervised contrastive loss on L2-normalised [CLS] embeddings
@@ -170,11 +175,12 @@ def train_one_epoch(
 
 
 @torch.no_grad()
-def evaluate(model: nn.Module, loader, device: torch.device) -> dict:
+def evaluate(model: nn.Module, loader, device: torch.device, amp: bool = False) -> dict:
     model.eval()
     probs, targets = [], []
     for images, labels in loader:
-        logits, _ = model(images.to(device))
+        with torch.autocast(device.type, dtype=torch.bfloat16, enabled=amp):
+            logits, _ = model(images.to(device))
         probs.append(F.softmax(logits.float(), dim=1).cpu())
         targets.append(labels)
     probs = torch.cat(probs).numpy()
@@ -261,8 +267,9 @@ def main() -> None:
     run_name = args.run_name or f"{arm}_seed{args.seed}"
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    amp = args.amp and device.type == "cuda"
     set_seed(args.seed)
-    print(f"Device    : {device}")
+    print(f"Device    : {device}   bf16 autocast: {amp}")
     print(f"Debug     : {debug}")
     print(f"Epochs    : {epochs}")
     print(f"Batch     : {batch_size}")
@@ -307,7 +314,7 @@ def main() -> None:
     for epoch in range(1, epochs + 1):
         t0 = time.time()
         metrics = train_one_epoch(
-            model, train_loader, optimizer, ce_criterion, con_criterion, device
+            model, train_loader, optimizer, ce_criterion, con_criterion, device, amp=amp
         )
         if args.final:
             print(
@@ -318,7 +325,7 @@ def main() -> None:
             history.append({"epoch": epoch, "train": metrics})
             continue
 
-        val = evaluate(model, val_loader, device)
+        val = evaluate(model, val_loader, device, amp=amp)
         print(
             f"Epoch {epoch:>3}/{epochs}  "
             f"loss={metrics['loss']:.4f}  ce={metrics['ce_loss']:.4f}  "
@@ -348,9 +355,9 @@ def main() -> None:
     # ── held-out test evaluation ─────────────────────────────────────────
     # The last-epoch model needs no validation labels for selection, which
     # matters in the low-label setting (the val split stays full-size).
-    test_last = evaluate(model, test_loader, device)
+    test_last = evaluate(model, test_loader, device, amp=amp)
     model.load_state_dict(torch.load(best_path, map_location=device), strict=False)
-    test = evaluate(model, test_loader, device)
+    test = evaluate(model, test_loader, device, amp=amp)
 
     auc = f"{test['macro_auc']:.4f}" if test["macro_auc"] is not None else "n/a"
     print(f"\nBest epoch {best_epoch} (val macro-F1 {best_f1:.4f}) → test:")
