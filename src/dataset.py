@@ -36,7 +36,23 @@ IMAGENET_STD = [0.229, 0.224, 0.225]
 
 # ── transforms ───────────────────────────────────────────────────────────────
 
-def get_train_transforms(img_size: int = 224) -> transforms.Compose:
+def get_train_transforms(img_size: int = 224, strong: bool = False) -> transforms.Compose:
+    if strong:
+        # Heavier augmentation aimed at robustness to a shifted test distribution
+        # (different cameras, lighting, framing): random crops/scale, rotation,
+        # stronger colour jitter, occasional blur.
+        return transforms.Compose([
+            transforms.RandomResizedCrop(
+                img_size, scale=(0.6, 1.0), ratio=(0.85, 1.18)
+            ),
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomVerticalFlip(),
+            transforms.RandomRotation(30),
+            transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.04),
+            transforms.RandomApply([transforms.GaussianBlur(5, sigma=(0.1, 1.5))], p=0.2),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
+        ])
     return transforms.Compose([
         transforms.Resize((img_size, img_size)),
         transforms.RandomHorizontalFlip(),
@@ -148,11 +164,22 @@ def class_counts(df: pd.DataFrame) -> dict[str, int]:
     return {name: int(n) for name, n in zip(LABEL_COLS, counts)}
 
 
+def load_groups(labeled_df: pd.DataFrame, group_csv: str) -> np.ndarray:
+    """Group id per row of ``labeled_df`` from a ``image,group`` CSV
+    (written by ``python -m src.make_groups``)."""
+    g = pd.read_csv(group_csv).set_index("image")["group"]
+    missing = set(labeled_df["image"]) - set(g.index)
+    if missing:
+        raise ValueError(f"{len(missing)} images missing from {group_csv}, e.g. {sorted(missing)[:3]}")
+    return g.loc[labeled_df["image"]].to_numpy()
+
+
 def make_splits(
     labeled_df: pd.DataFrame,
     val_frac: float = 0.15,
     test_frac: float = 0.15,
     seed: int = 42,
+    groups: Optional[np.ndarray] = None,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Stratified ``(train, val, test)`` split of the labeled frame.
 
@@ -160,13 +187,25 @@ def make_splits(
     scratch and Phase-1 arms of an experiment) see identical splits.  Falls
     back to an unstratified split when a class is too small to stratify
     (only happens on tiny debug subsets).
+
+    With ``groups`` (one id per row, e.g. near-duplicate clusters) all images of
+    a group land in the same split, which avoids the optimistic scores caused by
+    near-identical images of one ulcer appearing in both train and test.
     """
-    from sklearn.model_selection import train_test_split
+    from sklearn.model_selection import StratifiedGroupKFold, train_test_split
 
     y = labels_from_df(labeled_df)
     idx = np.arange(len(labeled_df))
 
     def _split(ix, frac, yy):
+        if groups is not None:
+            n = max(2, int(round(1.0 / frac)))
+            try:
+                cv = StratifiedGroupKFold(n_splits=n, shuffle=True, random_state=seed)
+                rest, held = next(cv.split(ix, yy, groups[ix]))
+                return ix[rest], ix[held]
+            except ValueError:
+                pass
         try:
             return train_test_split(ix, test_size=frac, stratify=yy, random_state=seed)
         except ValueError:
@@ -204,3 +243,34 @@ def subsample_stratified(
     except ValueError:
         keep, _ = train_test_split(idx, train_size=frac, random_state=seed)
     return df.iloc[np.sort(keep)].reset_index(drop=True)
+
+
+def load_pseudo(
+    probs_csv: str,
+    thresh: float = 0.9,
+    max_per_class: Optional[int] = None,
+    img_dir: Optional[str] = None,
+) -> pd.DataFrame:
+    """Pseudo-labeled frame from a teacher's ``image,none,infection,...`` probabilities.
+
+    Keeps images whose top-class probability is >= ``thresh``; ``max_per_class``
+    caps each class at its most confident images (rare classes are otherwise
+    swamped by the majority classes).  ``img_dir`` makes the image paths absolute
+    when the images live outside the main image directory.  Returns a frame with
+    ``image`` plus one-hot label columns, usable like labeled training data.
+    """
+    df = pd.read_csv(probs_csv)
+    probs = df[LABEL_COLS].to_numpy(dtype=float)
+    pred, conf = probs.argmax(1), probs.max(1)
+    keep = conf >= thresh
+    if max_per_class:
+        for c in range(len(LABEL_COLS)):
+            idx = np.where(keep & (pred == c))[0]
+            if len(idx) > max_per_class:
+                order = idx[np.argsort(-conf[idx])]
+                keep[order[max_per_class:]] = False
+    out = df.loc[keep, ["image"]].reset_index(drop=True)
+    if img_dir:
+        out["image"] = [os.path.abspath(os.path.join(img_dir, f)) for f in out["image"]]
+    out[LABEL_COLS] = np.eye(len(LABEL_COLS), dtype=int)[pred[keep]]
+    return out

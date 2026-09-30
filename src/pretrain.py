@@ -34,6 +34,7 @@ import argparse
 import os
 import time
 
+import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 
@@ -77,6 +78,17 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--batch_size", type=int,   default=None)
     p.add_argument("--lr",         type=float, default=DEFAULT_LR)
     p.add_argument("--mask_ratio", type=float, default=DEFAULT_MASK_RATIO)
+    p.add_argument(
+        "--extra_img_dirs", nargs="*", default=[],
+        help="Extra directories of unlabeled images (e.g. DFUC2020) added to the "
+             "3,994 unlabeled DFUC2021 images for pre-training.",
+    )
+    p.add_argument(
+        "--img_size", type=int, default=224,
+        help="Input resolution; must be a multiple of the patch size (14).",
+    )
+    p.add_argument("--lora_rank",   type=int,   default=16,
+                   help="LoRA rank (alpha = 2 x rank).")
     p.add_argument("--seed",        type=int,   default=0)
     p.add_argument("--num_workers", type=int,   default=2)
     p.add_argument(
@@ -161,8 +173,27 @@ def main() -> None:
         unlabeled_df = unlabeled_df.head(DEBUG_SAMPLES)
         print(f"Debug subset   : {len(unlabeled_df)} images")
 
+    img_dir = IMG_DIR
+    if args.img_size % 14:
+        raise SystemExit("--img_size must be a multiple of 14")
+    if args.extra_img_dirs:
+        # Switch to absolute paths so images from several directories can be mixed.
+        extra = []
+        for d in args.extra_img_dirs:
+            names = sorted(f for f in os.listdir(d)
+                           if f.lower().endswith((".jpg", ".jpeg", ".png")))
+            print(f"Extra images   : {len(names):>6}  from {d}")
+            extra += [os.path.abspath(os.path.join(d, f)) for f in names]
+        base = unlabeled_df[["image"]].copy()
+        base["image"] = [os.path.abspath(os.path.join(IMG_DIR, f)) for f in base["image"]]
+        unlabeled_df = pd.concat([base, pd.DataFrame({"image": extra})], ignore_index=True)
+        img_dir = ""
+        print(f"Total pre-training images: {len(unlabeled_df)}")
+        if debug:
+            unlabeled_df = unlabeled_df.tail(DEBUG_SAMPLES)
+
     loader = build_loader(
-        unlabeled_df, IMG_DIR, get_train_transforms(), batch_size,
+        unlabeled_df, img_dir, get_train_transforms(args.img_size), batch_size,
         num_workers=args.num_workers,
     )
 
@@ -170,6 +201,8 @@ def main() -> None:
     model = DFUDinoLoRAForMIM(
         mask_ratio=args.mask_ratio,
         loss_fn=args.loss_fn,
+        lora_rank=args.lora_rank,
+        lora_alpha=2 * args.lora_rank,
     )
     model.to(device)
     model.print_trainable_parameters()

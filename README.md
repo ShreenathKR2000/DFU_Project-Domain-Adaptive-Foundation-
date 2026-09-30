@@ -56,9 +56,12 @@ DFU_Project/
 │   ├── pretrain_model.py    # DFUDinoLoRAForMIM (MIM wrapper + decoder)
 │   ├── pretrain.py          # Phase 1: unsupervised MIM pre-training
 │   ├── train.py             # Phase 2: supervised classification + evaluation
-│   └── summarize.py         # scratch vs. pretrained summary / CSV / plot
+│   ├── make_groups.py       # near-duplicate clustering for leak-free splits
+│   ├── summarize.py         # scratch vs. pretrained summary / CSV / plot
+│   └── predict.py           # TTA + ensemble inference, submission CSV
 ├── slurm/                   # sbatch scripts
 ├── run_lowlabel.sh          # low-label experiment (one seed)
+├── run_pseudo.sh            # pseudo-labelling pipeline (one split seed)
 ├── .gitignore
 ├── CHANGELOG.md
 └── README.md
@@ -292,6 +295,122 @@ pipeline cannot be submitted as is. Suggested adaptations:
 5. **Evaluation discipline**: choose hyper-parameters on validation only,
    check the rules on external data/pre-trained weights, and keep submissions
    reproducible (fixed seeds, logged configs — already saved in `results/*.json`).
+
+### What the live leaderboard says about the evaluation
+
+On the DFUC2021 open leaderboard the top entries have macro-F1 ≈ 0.65 and ranks
+~50 ≈ 0.55, while this project's internal split gives ≈ 0.88. A gap that large
+means the internal split is **optimistic**: DFUC2021 has no patient IDs, so
+near-identical images of one ulcer can land in both train and test, and the
+hidden test set is also shifted (different patients / sessions). Consequences:
+
+- Epoch selection, hyper-parameters and the scratch-vs-Phase-1 comparison made on
+  the random split reward memorisation (train accuracy reaches 99%), so they say
+  little about leaderboard performance — and the "no benefit from Phase 1"
+  finding should be re-checked on a leak-free split, since domain adaptation is
+  precisely about shift.
+- The fix is a **group-aware split**: cluster near-duplicates and keep each
+  cluster in one split.
+
+```bash
+python -m src.make_groups --threshold 0.90        # writes groups.csv + leak diagnostic
+python -m src.train --group_csv groups.csv --seed 0 --imbalance weights ...
+```
+
+`make_groups` prints how many groups each threshold gives and the share of test
+images with a near-duplicate in train under the random vs. group-aware split.
+Choose a threshold that merges obvious duplicates without forming one giant
+cluster, then use `--group_csv` (also accepted by `src.predict`) for every
+validation decision. A good sign that the evaluation is fixed: group-split
+macro-F1 drops towards the leaderboard range (~0.55–0.65) and tracks your
+leaderboard submissions.
+
+Regularisation aimed at shift (compare on the group split): `--aug strong`
+(random resized crops, rotation, stronger colour jitter, blur), `--label_smoothing
+0.1`, fewer epochs / earlier stopping chosen on the group-validation split,
+then ensemble + TTA (`src.predict`). Further ideas: pseudo-labelling the 3,994
+unlabeled training images, a bigger backbone (`dinov2-large`), and — only if the
+challenge rules allow it — Phase-1 adaptation on the unlabeled test images.
+
+### Pseudo-labelling the unlabeled images
+
+The 3,994 unlabeled DFUC2021 training images are used so far only for Phase 1.
+Pseudo-labelling (noisy student) uses them for *supervised* training too:
+
+1. train teachers on the labeled **train split** (same `--split_seed`, different
+   `--seed`s — the teachers never see the val/test labels of that split);
+2. predict the unlabeled images with the teacher ensemble + flip TTA
+   (`python -m src.predict --unlabeled_train ...` writes `*_probs.csv`);
+3. train a student on train + confident pseudo-labels (`--pseudo_csv`,
+   `--pseudo_thresh`, `--pseudo_max_per_class`) with strong augmentation.
+
+```bash
+GROUP_CSV=groups.csv ./run_pseudo.sh 0     # also 1, 2 for a paired comparison
+python -m src.summarize
+```
+
+`run_pseudo.sh` trains the student **and** a baseline with identical settings but
+no pseudo-labels; `summarize` shows them as separate rows (`[group+strong-aug+pseudo0.9]`
+vs `[group+strong-aug]`). The student is useful only if it beats that baseline over
+several split seeds.
+
+Notes: confident predictions are dominated by the big classes, so watch the
+`Pseudo-labels: +N images {...}` line and use `CAP=<n>` (or a lower `THRESH`) to
+keep ischaemia/both from being drowned out; pseudo-labels can reinforce teacher
+mistakes (confirmation bias), so try a higher threshold if the student gets worse;
+images in the unlabeled pool are not covered by `groups.csv`, so near-duplicates
+of held-out images can enter training (with pseudo-labels, never true ones).
+`--pseudo_img_dir` accepts other image folders (only if the challenge rules allow).
+Pseudo-labelling can be repeated: use the student ensemble as the next teacher.
+
+### Toward a leaderboard submission
+
+**Which data can do what.** DFUC2021 (used so far) is labeled for 4-class
+classification. DFUC2020, as I recall, provides ulcer *bounding boxes* for
+detection, not class labels, so it cannot train the 4-class head. It can be used
+(a) as extra *unlabeled* images for Phase 1, (b) for a detection task if that is
+the target, or (c) cropped to the boxes to get ulcer-centred patches similar to
+DFUC2021 (needs the annotation format). Check licences and each challenge's rules
+on external data and pre-trained weights first; if the target is segmentation
+(DFUC2022), masks are required and neither dataset supplies them.
+
+**Recipe (classification).** Decide everything on held-out data, then retrain on
+all labels and submit an ensemble:
+
+```bash
+# 1. Extra unlabeled images for Phase 1 (optional; any folder of jpg/png)
+python -m src.pretrain --epochs 100 --batch_size 32 --num_workers 8 \
+    --extra_img_dirs /path/to/DFUC2020/images
+
+# 2. Pick settings on the held-out split (resolution, LoRA rank, epochs, ...).
+#    Vary --seed, keep --split_seed fixed so the models share one test split.
+for S in 10 11 12; do
+  python -m src.train --split_seed 0 --seed $S --epochs 30 --batch_size 32 \
+      --imbalance weights --num_workers 8 --img_size 224 --run_name m$S
+done
+
+# 3. Measure what TTA and ensembling buy on that test split
+python -m src.predict --checkpoints checkpoints/m10_best.pt checkpoints/m11_best.pt \
+    checkpoints/m12_best.pt --split test --split_seed 0 --tta
+
+# 4. Final models on ALL labeled images (fixed epochs chosen in step 2)
+for S in 1 2 3 4 5; do
+  python -m src.train --final --seed $S --epochs 30 --batch_size 32 \
+      --imbalance weights --num_workers 8 --run_name final$S
+done
+
+# 5. Predict the challenge images (one-hot CSV + probabilities)
+python -m src.predict --checkpoints checkpoints/final*_final.pt \
+    --img_dir /path/to/challenge_images --tta --out predictions.csv
+```
+
+Knobs worth testing in step 2 (one at a time, compare over seeds): `--img_size 448`
+(roughly 5x slower; small ulcers may benefit), `--lora_rank 32`, `--imbalance
+sampler`, Phase 1 with `--extra_img_dirs`, and longer Phase 1. Expect gains from
+these to be modest relative to seed noise (±0.02 macro-F1 here); the ensemble +
+TTA step is the most reliable improvement. The largest unknown is distribution
+shift between the public training images and the hidden test set, which no
+internal split can measure.
 
 ## Initial Results (Debug Runs)
 
