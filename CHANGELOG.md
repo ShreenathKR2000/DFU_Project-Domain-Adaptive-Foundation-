@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-09-30
+
+### Added
+
+- `src/train.py` — stratified train/val/test split (`--val_frac`, `--test_frac`,
+  `--split_seed`), per-epoch validation accuracy / macro-F1 / per-class recall,
+  best-epoch selection on validation macro-F1, final test evaluation with
+  confusion matrix, JSON results (`results/<run_name>.json`) and best-weights
+  checkpoint (`checkpoints/<run_name>_best.pt`).
+- `src/train.py` — `--seed`, `--imbalance {none,weights,sampler}`,
+  `--num_workers`, `--run_name`, `--out_dir`.
+- `src/dataset.py` — `make_splits`, `class_counts`, `labels_from_df`,
+  `check_labeled`.
+- `src/summarize.py` — aggregates `results/*.json` into a scratch vs.
+  pretrained comparison with paired per-seed differences.
+- `slurm/pretrain.sbatch`, `slurm/train_array.sbatch` — Slurm scripts
+  (Phase 1; 3 seeds x 2 arms job array).
+
+### Changed
+
+- `src/model.py` — loading Phase-1 LoRA weights now fails loudly if no LoRA
+  tensors are found or the load was silently ignored (all `lora_B` still
+  zero); LoRA target names adapt to `transformers` 5.x (`q_proj`/`v_proj`).
+- `src/pretrain.py` — `--seed`, `--num_workers`.
+- `src/train.py` no longer saves `dfu_dino_lora.pt`; see `*_best.pt` above.
+
 ## [0.3.0] - 2026-03-07
 
 ### Phase 1 → Phase 2 Bridge

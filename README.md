@@ -149,6 +149,39 @@ python -m src.train --epochs 30 --batch_size 4 --lr 5e-5 \
     --pretrained_lora_path checkpoints/dfu_pretrained_backbone.pt
 ```
 
+### Evaluating the hypothesis (scratch vs. Phase-1)
+
+`src.train` splits the 5,955 labeled images (stratified, 70/15/15) into
+train / val / test. Each epoch it reports validation accuracy, **macro-F1** and
+per-class recall; the best epoch (by validation macro-F1) is evaluated once on
+the held-out test split. Results (metrics, confusion matrix, per-epoch history)
+are written to `results/<run_name>.json`; the best LoRA + head weights to
+`checkpoints/<run_name>_best.pt`.
+
+Runs that share `--seed` share the same split, so the two arms are paired:
+
+```bash
+python -m src.train --seed 0 --imbalance weights --run_name scratch_seed0
+python -m src.train --seed 0 --imbalance weights --run_name pretrained_seed0 \
+    --pretrained_lora_path checkpoints/dfu_pretrained_backbone.pt
+python -m src.summarize        # mean ± std per arm + paired per-seed differences
+```
+
+Other flags: `--imbalance {none,weights,sampler}` (inverse-frequency CE weights
+or class-balanced sampling), `--num_workers`, `--val_frac`, `--test_frac`.
+Phase 1 also accepts `--seed` and `--num_workers`.
+
+Notes on interpreting results:
+
+- DFUC2021 is heavily imbalanced (`ischaemia` has only a few hundred labeled
+  images), so accuracy alone is misleading — use macro-F1 and per-class recall.
+- Only a few dozen `ischaemia` images land in each val/test split, so single
+  runs are noisy; compare means over several seeds.
+- The dataset has no patient IDs, so near-duplicate images of one patient can
+  fall on both sides of a random split and inflate scores for *both* arms.
+- Phase 1 only uses unlabeled images, so the test split is never seen during
+  pre-training.
+
 ## Initial Results (Debug Runs)
 
 ### Phase 1 — MIM Pre-training (debug)
@@ -203,17 +236,22 @@ Epoch 2/2  loss=0.4085  ce=0.8170  con=0.0000  acc=0.750  (1.9 s)
 **Observations** — Domain-adapted LoRA weights give +5 pp accuracy and lower
 final loss on the debug split. The gap is expected to grow on the full dataset.
 
-## Cluster / HPC Deployment
+## Cluster / HPC Deployment (Slurm)
 
-The codebase is structured to be scheduler-agnostic. Once the target cluster
-environment is confirmed, a dedicated deployment script will be written for
-that specific setup.
+Create the environment once on the cluster (venv or conda), cache the model
+(`python -c "from transformers import AutoModel; AutoModel.from_pretrained('facebook/dinov2-base')"`),
+then submit from the project root (the scripts expect `.venv/` there; edit the
+`source` line for conda):
 
-> **Note:** The training entry-points (`src/pretrain` and `src/train`) are
-> plain Python modules with no framework-specific launcher dependencies.
-> They will be wrapped in a Slurm `sbatch` script, a PBS `qsub` script,
-> a Kubernetes Job manifest, or equivalent — depending on the cluster type
-> and configuration provided.
+```bash
+mkdir -p logs
+sbatch --partition=<gpu-partition> slurm/pretrain.sbatch      # Phase 1 (EPOCHS=100 by default)
+sbatch --partition=<gpu-partition> slurm/train_array.sbatch   # 3 seeds x {scratch, pretrained}
+python -m src.summarize
+```
+
+Monitor with `squeue -u $USER` and `tail -f logs/*.out`. On an NVIDIA L40S
+(46 GB) batch size 32 uses about 5 GB; raise `--batch_size` if desired.
 
 ## License
 
