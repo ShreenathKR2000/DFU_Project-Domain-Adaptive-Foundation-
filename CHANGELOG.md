@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-09-30
+
+### Added
+
+- `src/train.py` — `--train_frac` (class-stratified subset of the training
+  split, identical for runs sharing `--split_seed`; val/test unchanged) for
+  low-label experiments; last-epoch test metrics (`test_last_epoch`) saved
+  alongside best-validation-epoch metrics.
+- `src/dataset.py` — `subsample_stratified`.
+- `run_lowlabel.sh` — 10/25/50 % label fractions x {scratch, pretrained} for one seed.
+- `src/summarize.py` — results grouped by label fraction, `results/summary.csv`,
+  `results/label_efficiency.png` (macro-F1 vs. label fraction).
+- README — full-label results (3 seeds: no significant benefit from Phase 1),
+  low-label protocol, ideas for further study, notes on DFUC challenges.
+
 ## [0.4.0] - 2026-09-30
 
 ### Added

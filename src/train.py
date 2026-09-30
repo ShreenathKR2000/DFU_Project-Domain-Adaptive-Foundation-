@@ -45,6 +45,7 @@ from src.dataset import (
     labels_from_df,
     load_and_split_csv,
     make_splits,
+    subsample_stratified,
 )
 from src.model import DFUDinoLoRA
 
@@ -92,6 +93,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--val_frac", type=float, default=0.15)
     parser.add_argument("--test_frac", type=float, default=0.15)
+    parser.add_argument(
+        "--train_frac", type=float, default=1.0,
+        help="Fraction of the training split to keep (class-stratified, same "
+             "subset for every run sharing --split_seed). Val/test are unchanged.",
+    )
     parser.add_argument(
         "--imbalance", choices=["none", "weights", "sampler"], default="none",
         help="Class-imbalance handling: inverse-frequency CE weights, or a "
@@ -260,6 +266,7 @@ def main() -> None:
     print(f"LoRA      : {args.pretrained_lora_path or 'scratch'}")
     print(f"Seed      : {args.seed} (split seed {split_seed})")
     print(f"Imbalance : {args.imbalance}")
+    print(f"Train frac: {args.train_frac}")
     print(f"Run name  : {run_name}")
 
     # ── data ─────────────────────────────────────────────────────────────
@@ -272,6 +279,9 @@ def main() -> None:
     train_df, val_df, test_df = make_splits(
         labeled_df, args.val_frac, args.test_frac, seed=split_seed
     )
+    if args.train_frac < 1.0:
+        train_df = subsample_stratified(train_df, args.train_frac, seed=split_seed)
+        print(f"Low-label setting: keeping {args.train_frac:.0%} of the training split")
     for name, part in (("train", train_df), ("val", val_df), ("test", test_df)):
         print(f"{name:<5} split: {len(part):>5}  {class_counts(part)}")
 
@@ -351,6 +361,9 @@ def main() -> None:
             )
 
     # ── final evaluation on the held-out test split ──────────────────────
+    # Last-epoch model: needs no validation labels for model selection, which
+    # matters in the low-label setting (the val split stays full-size).
+    test_last = evaluate(model, test_loader, device)
     model.load_state_dict(torch.load(best_path, map_location=device), strict=False)
     test = evaluate(model, test_loader, device)
     print(f"\nBest epoch {best_epoch} (val macro-F1 {best_f1:.4f}) → test:")
@@ -358,6 +371,8 @@ def main() -> None:
         f"  acc={test['accuracy']:.3f}  bal_acc={test['balanced_accuracy']:.3f}  "
         f"macro_f1={test['macro_f1']:.4f}"
     )
+    print(f"  last epoch ({epochs}): macro_f1={test_last['macro_f1']:.4f}  "
+          f"acc={test_last['accuracy']:.3f}")
     for name, m in test["per_class"].items():
         print(
             f"  {name:<10} P={m['precision']:.3f}  R={m['recall']:.3f}  "
@@ -381,6 +396,7 @@ def main() -> None:
         "best_epoch": best_epoch,
         "best_val_macro_f1": best_f1,
         "test": test,
+        "test_last_epoch": test_last,
         "history": history,
         "train_seconds": time.time() - t_start,
     }
