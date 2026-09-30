@@ -3,12 +3,13 @@
 # of the training labels.  Epochs are raised for small fractions so every
 # fraction gets a comparable number of gradient steps.
 #
-#   ./run_lowlabel.sh 0        # seed 0
+#   ./scripts/run_lowlabel.sh 0        # seed 0
 #   (run seeds 1 and 2 the same way, e.g. in parallel with nohup)
 #
 # The full-label (100 %) runs come from the main comparison (run_rest.sh).
 set -e
-SEED=${1:?usage: ./run_lowlabel.sh <seed>}
+cd "$(dirname "$0")/.."   # run from the project root
+SEED=${1:?usage: ./scripts/run_lowlabel.sh <seed>}
 LORA=${LORA_PATH:-checkpoints/dfu_pretrained_backbone.pt}
 
 for CFG in "0.1 100" "0.25 60" "0.5 40"; do

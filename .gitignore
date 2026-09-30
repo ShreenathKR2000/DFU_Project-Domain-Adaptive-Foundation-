@@ -44,3 +44,10 @@ Thumbs.db
 
 # ── Hugging Face cache (can be very large) ───────────────────────────────────
 .cache/
+
+# ── Run outputs ──────────────────────────────────────────────────────────────
+logs/
+*.log
+nohup.out
+predictions*.csv
+pseudo_*.csv
