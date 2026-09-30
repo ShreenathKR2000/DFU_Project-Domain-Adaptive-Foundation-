@@ -56,7 +56,8 @@ DFU_Project/
 │   ├── pretrain_model.py    # DFUDinoLoRAForMIM (MIM wrapper + decoder)
 │   ├── pretrain.py          # Phase 1: unsupervised MIM pre-training
 │   ├── train.py             # Phase 2: supervised classification + evaluation
-│   └── summarize.py         # scratch vs. pretrained summary / CSV / plot
+│   ├── summarize.py         # scratch vs. pretrained summary / CSV / plot
+│   └── predict.py           # TTA + ensemble inference, submission CSV
 ├── slurm/                   # sbatch scripts
 ├── run_lowlabel.sh          # low-label experiment (one seed)
 ├── .gitignore
@@ -292,6 +293,55 @@ pipeline cannot be submitted as is. Suggested adaptations:
 5. **Evaluation discipline**: choose hyper-parameters on validation only,
    check the rules on external data/pre-trained weights, and keep submissions
    reproducible (fixed seeds, logged configs — already saved in `results/*.json`).
+
+### Toward a leaderboard submission
+
+**Which data can do what.** DFUC2021 (used so far) is labeled for 4-class
+classification. DFUC2020, as I recall, provides ulcer *bounding boxes* for
+detection, not class labels, so it cannot train the 4-class head. It can be used
+(a) as extra *unlabeled* images for Phase 1, (b) for a detection task if that is
+the target, or (c) cropped to the boxes to get ulcer-centred patches similar to
+DFUC2021 (needs the annotation format). Check licences and each challenge's rules
+on external data and pre-trained weights first; if the target is segmentation
+(DFUC2022), masks are required and neither dataset supplies them.
+
+**Recipe (classification).** Decide everything on held-out data, then retrain on
+all labels and submit an ensemble:
+
+```bash
+# 1. Extra unlabeled images for Phase 1 (optional; any folder of jpg/png)
+python -m src.pretrain --epochs 100 --batch_size 32 --num_workers 8 \
+    --extra_img_dirs /path/to/DFUC2020/images
+
+# 2. Pick settings on the held-out split (resolution, LoRA rank, epochs, ...).
+#    Vary --seed, keep --split_seed fixed so the models share one test split.
+for S in 10 11 12; do
+  python -m src.train --split_seed 0 --seed $S --epochs 30 --batch_size 32 \
+      --imbalance weights --num_workers 8 --img_size 224 --run_name m$S
+done
+
+# 3. Measure what TTA and ensembling buy on that test split
+python -m src.predict --checkpoints checkpoints/m10_best.pt checkpoints/m11_best.pt \
+    checkpoints/m12_best.pt --split test --split_seed 0 --tta
+
+# 4. Final models on ALL labeled images (fixed epochs chosen in step 2)
+for S in 1 2 3 4 5; do
+  python -m src.train --final --seed $S --epochs 30 --batch_size 32 \
+      --imbalance weights --num_workers 8 --run_name final$S
+done
+
+# 5. Predict the challenge images (one-hot CSV + probabilities)
+python -m src.predict --checkpoints checkpoints/final*_final.pt \
+    --img_dir /path/to/challenge_images --tta --out predictions.csv
+```
+
+Knobs worth testing in step 2 (one at a time, compare over seeds): `--img_size 448`
+(roughly 5x slower; small ulcers may benefit), `--lora_rank 32`, `--imbalance
+sampler`, Phase 1 with `--extra_img_dirs`, and longer Phase 1. Expect gains from
+these to be modest relative to seed noise (±0.02 macro-F1 here); the ensemble +
+TTA step is the most reliable improvement. The largest unknown is distribution
+shift between the public training images and the hidden test set, which no
+internal split can measure.
 
 ## Initial Results (Debug Runs)
 
