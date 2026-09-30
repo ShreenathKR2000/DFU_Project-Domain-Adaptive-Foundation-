@@ -56,6 +56,7 @@ DFU_Project/
 │   ├── pretrain_model.py    # DFUDinoLoRAForMIM (MIM wrapper + decoder)
 │   ├── pretrain.py          # Phase 1: unsupervised MIM pre-training
 │   ├── train.py             # Phase 2: supervised classification + evaluation
+│   ├── make_groups.py       # near-duplicate clustering for leak-free splits
 │   ├── summarize.py         # scratch vs. pretrained summary / CSV / plot
 │   └── predict.py           # TTA + ensemble inference, submission CSV
 ├── slurm/                   # sbatch scripts
@@ -293,6 +294,42 @@ pipeline cannot be submitted as is. Suggested adaptations:
 5. **Evaluation discipline**: choose hyper-parameters on validation only,
    check the rules on external data/pre-trained weights, and keep submissions
    reproducible (fixed seeds, logged configs — already saved in `results/*.json`).
+
+### What the live leaderboard says about the evaluation
+
+On the DFUC2021 open leaderboard the top entries have macro-F1 ≈ 0.65 and ranks
+~50 ≈ 0.55, while this project's internal split gives ≈ 0.88. A gap that large
+means the internal split is **optimistic**: DFUC2021 has no patient IDs, so
+near-identical images of one ulcer can land in both train and test, and the
+hidden test set is also shifted (different patients / sessions). Consequences:
+
+- Epoch selection, hyper-parameters and the scratch-vs-Phase-1 comparison made on
+  the random split reward memorisation (train accuracy reaches 99%), so they say
+  little about leaderboard performance — and the "no benefit from Phase 1"
+  finding should be re-checked on a leak-free split, since domain adaptation is
+  precisely about shift.
+- The fix is a **group-aware split**: cluster near-duplicates and keep each
+  cluster in one split.
+
+```bash
+python -m src.make_groups --threshold 0.90        # writes groups.csv + leak diagnostic
+python -m src.train --group_csv groups.csv --seed 0 --imbalance weights ...
+```
+
+`make_groups` prints how many groups each threshold gives and the share of test
+images with a near-duplicate in train under the random vs. group-aware split.
+Choose a threshold that merges obvious duplicates without forming one giant
+cluster, then use `--group_csv` (also accepted by `src.predict`) for every
+validation decision. A good sign that the evaluation is fixed: group-split
+macro-F1 drops towards the leaderboard range (~0.55–0.65) and tracks your
+leaderboard submissions.
+
+Regularisation aimed at shift (compare on the group split): `--aug strong`
+(random resized crops, rotation, stronger colour jitter, blur), `--label_smoothing
+0.1`, fewer epochs / earlier stopping chosen on the group-validation split,
+then ensemble + TTA (`src.predict`). Further ideas: pseudo-labelling the 3,994
+unlabeled training images, a bigger backbone (`dinov2-large`), and — only if the
+challenge rules allow it — Phase-1 adaptation on the unlabeled test images.
 
 ### Toward a leaderboard submission
 

@@ -42,6 +42,7 @@ from src.dataset import (
     get_eval_transforms,
     labels_from_df,
     load_and_split_csv,
+    load_groups,
     make_splits,
 )
 from src.model import DFUDinoLoRA
@@ -65,6 +66,8 @@ def parse_args() -> argparse.Namespace:
     src.add_argument("--img_dir", type=str,
                      help="Directory of unlabeled images to predict.")
     p.add_argument("--split_seed", type=int, default=0)
+    p.add_argument("--group_csv", type=str, default=None,
+                   help="Same group CSV that was used for training (--split only).")
     p.add_argument("--val_frac", type=float, default=0.15)
     p.add_argument("--test_frac", type=float, default=0.15)
     p.add_argument("--out", type=str, default="predictions.csv")
@@ -109,8 +112,9 @@ def main() -> None:
     if args.split:
         labeled_df, _ = load_and_split_csv(CSV_PATH)
         check_labeled(labeled_df)
+        groups = load_groups(labeled_df, args.group_csv) if args.group_csv else None
         _, val_df, test_df = make_splits(
-            labeled_df, args.val_frac, args.test_frac, seed=args.split_seed
+            labeled_df, args.val_frac, args.test_frac, seed=args.split_seed, groups=groups
         )
         df, img_dir = (val_df if args.split == "val" else test_df), IMG_DIR
         y_true = labels_from_df(df)
