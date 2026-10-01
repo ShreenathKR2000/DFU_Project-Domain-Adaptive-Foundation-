@@ -1,0 +1,6 @@
+# Ensemble + flip-TTA scores on the group-aware test split (813 images, split seed 0).
+# Transcribed from terminal output (these runs wrote no log file); the other ensembles are in logs/exp/ens_*.txt.
+set,models,tta,macro_f1,macro_auc,bal_acc,acc
+pre_basic,"g_pre_basic_s0-2",1,0.8226,0.9509,0.831,0.813
+pre_pseudo,"g_pre_pseudo_s0-2",1,0.8378,0.9452,0.839,0.836
+all9,"g_pre_basic + g_pre_pseudo + g_student (s0-2)",1,0.8467,0.9373,0.852,0.841

@@ -1,8 +1,8 @@
-# DFUC2021 leaderboard: metrics, targets and expectations
+# DFUC2021 leaderboard: metrics, position, expectations
 
 The DFUC2021 *open* (testing-set) leaderboard ranks submissions by **macro-F1** over the four
-classes. This page records the reference numbers, how the approach relates to them, and what
-can realistically be expected. Nothing here is a measured result of this project unless stated.
+classes. This page records the reference scores, where this project stands, and what can honestly
+be expected. **No submission has been made yet**; nothing here is a measured leaderboard result.
 
 ## 1. Reference scores (live leaderboard snapshot)
 
@@ -15,76 +15,89 @@ can realistically be expected. Nothing here is a measured result of this project
 | 32 sayefshahriar | 0.5923 | 0.6816 | 0.6865 | 0.5067 | 0.4945 | 0.6175 | 0.5795 | 0.8686 | 0.6613 | 0.8967 |
 | 39 mohid | 0.5817 | 0.7371 | 0.6031 | 0.5088 | 0.4778 | 0.5821 | 0.6086 | 0.8257 | 0.6478 | 0.8483 |
 | 49 d4mz | 0.5507 | 0.7324 | 0.6011 | 0.4397 | 0.4294 | 0.5579 | 0.5983 | 0.8596 | 0.6382 | 0.8783 |
-| **this project** | *TBD* | | | | | | | | | |
+| **this project** | *not yet submitted* | | | | | | | | | |
 
-Top-4 ranges: macro-F1 **0.652–0.659** (spread only 0.008), Control F1 0.746–0.771, Infection
-0.642–0.715, Ischaemia 0.584–0.628, Both 0.563–0.592, macro AUC 0.870–0.895, micro F1 0.686–0.717.
-Mid-table (ranks ~32–50): macro-F1 0.55–0.59, macro AUC 0.83–0.87.
+Top-4 ranges: macro-F1 **0.652–0.659** (spread 0.008), Control F1 0.746–0.771, Infection 0.642–0.715,
+Ischaemia 0.584–0.628, Both 0.563–0.592, macro AUC 0.870–0.895. Ranks ≈ 32–50: macro-F1 0.55–0.59.
 
 ## 2. What the numbers say
 
-- **Hard task:** even the best entries are at ~0.66 macro-F1 and ~0.72 micro-F1 (accuracy).
-- **Rare classes decide the ranking:** Control F1 is similar across the board (0.73–0.77);
-  ischaemia and "both" (0.43–0.63) are where entries differ.
-- **AUC ≫ F1:** macro AUC ≈ 0.87–0.89 vs macro-F1 ≈ 0.65 — the models rank images reasonably but the
-  hard decisions are off, consistent with a shifted class distribution / calibration between training
-  and the hidden test set. Per-class decision thresholds are therefore a cheap lever (tune on
-  group-validation data, not on the leaderboard).
-- **Internal scores are not comparable:** this project's random-split macro-F1 (0.88) is far above
-  the leaderboard because of near-duplicate leakage and because the test set is shifted.
-  See [EXPERIMENTS.md](EXPERIMENTS.md) §2–3.
+- **Hard task:** even the best entries reach ≈ 0.66 macro-F1 and ≈ 0.72 micro-F1.
+- **Rare classes decide the ranking:** Control F1 is similar everywhere (0.73–0.77); ischaemia and
+  "both" (0.43–0.63) are where entries differ.
+- **AUC ≫ F1:** macro AUC ≈ 0.87–0.89 vs macro-F1 ≈ 0.65 — ranking quality is decent but the hard
+  decisions are off, consistent with a class-mix / calibration shift between training and test.
 
-## 3. How this approach differs, and why it might help
+## 3. Where this project stands
+
+![Story](figures/fig_story.png)
+
+Internal, leak-free (group-aware) results — **a different, non-hidden test set, so not comparable**:
+
+| Setup | Macro-F1 | Macro AUC | F1: Ctrl / Inf / Isch / Both |
+|---|---|---|---|
+| Scratch (single model, mean of 3) | 0.773 | 0.936 | 0.807 / 0.774 / 0.712 / 0.798 |
+| Phase 1 | 0.799 | 0.934 | 0.794 / 0.779 / 0.771 / 0.851 |
+| Phase 1 + pseudo-labels | 0.821 | 0.933 | 0.825 / 0.786 / 0.777 / 0.895 |
+| 3-model ensemble + TTA (Phase 1 + pseudo) | 0.838 | 0.945 | — |
+| 9-model ensemble + TTA | 0.847 | 0.937 | — |
+
+The gap between these (0.77–0.85) and the leaderboard (0.55–0.66) is mostly **distribution shift** to the
+hidden test set: the random-split → group-split drop explains ≈ 0.1, the rest cannot be measured on
+training data. The shift is visible in the predictions on the real test images:
+
+![Shift](figures/fig_shift.png)
+
+On held-out training data the models predict ≈ 3 % ischaemia and ≈ 41 % infection; on the 5,734
+challenge images they predict 8–10 % and 29–34 %, so the challenge set probably has a different class
+mix (or looks different enough to move the decisions). Two prediction sets from different model
+groups agree on 86.6 % of images.
+
+## 4. How the approach differs and why it may help
 
 | Aspect | Typical supervised entry (as far as I know) | This project |
 |---|---|---|
-| Backbone | ImageNet CNN/ViT fully fine-tuned, often an ensemble | Frozen DINOv2 ViT-B/14 + LoRA (0.68 % trainable), ensemble of cheap models |
-| Unlabeled data (3,994 images) | Often unused, or pseudo-labelling | Self-supervised domain adaptation (SimMIM) **and** pseudo-labelling |
-| Loss | Cross-entropy (+ class weights / focal) | CE + supervised contrastive on [CLS] + class weights |
-| Validation | Random hold-out / k-fold | Group-aware split against near-duplicate leakage |
-| Inference | Flip/TTA + ensemble | Flip TTA + ensemble (`src.predict`) |
+| Backbone | ImageNet CNN/ViT fully fine-tuned, often an ensemble | Frozen DINOv2 ViT-B/14 + LoRA (0.68 % trainable); ensemble of ≈ 5-minute models |
+| Unlabeled data (3,994) | often unused, or pseudo-labelling | SimMIM domain adaptation **and** pseudo-labelling |
+| Loss | cross-entropy (+ weights / focal) | CE + supervised contrastive on [CLS] + class weights |
+| Validation | random hold-out / k-fold | group-aware split against near-duplicate leakage |
+| Inference | TTA + ensemble | flip TTA + ensemble |
 
-Potential advantages: strong general-purpose features with little capacity to overfit (important
-with ~230 ischaemia images); ~10 minutes per model on an L40S, so many seeds, ensembles and
-pseudo-label rounds are affordable; a principled way to use the unlabeled images.
+Measured contribution of each part (leak-free split): Phase 1 **+0.026**, pseudo-labels **+0.022**,
+ensembling **+0.03**, TTA **+0.01–0.02**; strong augmentation + label smoothing **−** (AUC −0.03).
+These are modest, individually near the seed noise (±0.01), but consistent across seeds.
 
-**What the evidence says so far:** on the random split, Phase 1 gave *no* measurable gain (0.870 vs
-0.880). That result must be re-checked on the leak-free split and in the low-label setting before
-any claim is made. The approach may still help through the other components (ensemble + TTA,
-pseudo-labelling, regularisation for shift), which have not yet been measured on the real data.
+## 5. Honest expectations
 
-## 4. Metrics to expect — honest estimate
+These are planning estimates, not results:
 
-These are planning guesses, not results:
+- **Leaderboard, this recipe:** the internal gains are a few points each; whether they transfer under
+  shift is unknown. A mid-table score (≈ 0.55–0.62 macro-F1) is plausible; the top-4 are separated by
+  < 0.01, so reaching ≥ 0.65 would need a further ≈ +0.05 beyond the internal gains and is a stretch goal.
+- **What would raise confidence:** the leaderboard row of the first submission — it shows whether the
+  gap is mostly shift (all classes low), class mix (ischaemia/infection F1 off) or calibration (AUC
+  fine, F1 low).
+- **Watch these columns:** macro-F1 ≥ 0.65, ischaemia F1 ≥ 0.58, both F1 ≥ 0.56, macro AUC ≥ 0.89.
 
-- **Single model, group-aware validation:** probably in the 0.55–0.65 macro-F1 range if the split
-  removes the leakage; a value near 0.88 would mean the split still leaks.
-- **Leaderboard, single DINOv2-LoRA model:** plausibly mid-table (≈ 0.55–0.60 macro-F1, i.e. ranks
-  ~30–50) — comparable to the entries above.
-- **Ensemble + TTA + pseudo-labelling + regularisation:** a further gain of a few points is plausible
-  but unproven; ensembles and TTA are the most reliable levers, the rest must be validated.
-- **Top-5 (≥ 0.65):** would need ≈ +0.05–0.10 over a mid-table single model. The top-4 are separated by
-  < 0.01, so this is ambitious; treat it as a stretch goal and the research comparisons (Phase 1,
-  low-label, pseudo-labelling, group-aware evaluation) as the primary deliverable.
+## 6. Submission workflow
 
-Targets to watch on every evaluation: macro-F1 ≥ 0.65, ischaemia F1 ≥ 0.58, both F1 ≥ 0.56,
-macro AUC ≥ 0.89.
-
-## 5. Submission workflow
-
-1. Decide settings on the **group-aware** split (epochs, `--aug`, `--label_smoothing`, resolution, rank).
-2. Train 3–5 models on all labels: `python -m src.train --final --seed S --epochs E --run_name finalS`.
+1. Settings were chosen on the **group-aware** split (E4 in [EXPERIMENTS.md](EXPERIMENTS.md)).
+2. Final models: `python -m src.train --final ...` on all labeled images + pseudo-labels (3 seeds).
 3. Predict the challenge images with ensemble + TTA:
-   `python -m src.predict --checkpoints checkpoints/final*_final.pt --img_dir <images> --tta --out predictions.csv`
-   (one-hot CSV in the `train.csv` schema plus `*_probs.csv`; adapt columns if the submission format differs).
-4. Submit, then log the leaderboard score next to the group-validation score. If they track each other,
-   the evaluation is trustworthy; if not, revisit the grouping threshold.
+   `python -m src.predict --checkpoints checkpoints/final_pre_pseudo_s*_final.pt --img_dir <test_images> --tta --out sub_final.csv`
+   → `sub_final.csv` (one-hot labels) and `sub_final_probs.csv` (probabilities). Candidate files are in
+   [`artifacts/`](../artifacts/README.md).
+4. **Check the submission format first.** The leaderboard reports AUC, so it probably wants
+   probabilities (`*_probs.csv`); AUC computed from hard labels is much lower. If the page shows 0/1
+   values, submit the one-hot file.
+5. After submitting, log the score next to the group-split score; if they track each other the
+   evaluation is trustworthy.
 
-## 6. Rules and risks
+## 7. Rules and risks
 
-- Check the challenge rules on external data, pre-trained weights (DINOv2 must be permitted),
-  pseudo-labelling and use of unlabeled test images before relying on them.
+- Check the rules on pre-trained weights (DINOv2), pseudo-labelling, and any use of unlabeled test
+  images (e.g. class-prior adjustment or Phase-1 adaptation on them) before relying on them.
 - Do not tune on the leaderboard; use it as a sparse check of shift.
-- DFUC2020 (as far as I recall, bounding-box detection data) cannot train the 4-class head; it can only add
-  unlabeled images to Phase 1 (`--extra_img_dirs`). DFUC2022 (segmentation, Dice) is a different task
-  and would need masks and a segmentation head.
+- DFUC2020 (as far as I recall, ulcer bounding boxes for detection) cannot train the 4-class head; at
+  most it can add unlabeled images to Phase 1 (`--extra_img_dirs`). DFUC2022 (segmentation, Dice) is a
+  different task and would need masks and a segmentation head.

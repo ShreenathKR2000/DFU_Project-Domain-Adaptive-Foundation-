@@ -15,9 +15,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | First real result | 0.4.x | 3 seeds x 2 arms on ~4,100 labeled images: scratch 0.880 ± 0.017 vs pretrained 0.870 ± 0.010 test macro-F1 — **no measurable benefit of Phase 1 at full labels**. |
 | Label-efficiency study | 0.5.0 | `--train_frac`, grouped summary, CSV + plot, to test whether Phase 1 helps when labels are scarce. |
 | Leaderboard reality check | 0.7.0 | Live DFUC2021 leaderboard: top ≈ 0.65 / rank ~50 ≈ 0.55 macro-F1 vs 0.88 internally, so the random split leaks near-duplicates. Added near-duplicate grouping, group-aware splits, stronger augmentation and label smoothing. |
+| Real results + documentation | 0.11.0 | One-shot suite run on the L40S (43 min): leak-free ablation, pseudo-labelling, ensembles, final models and challenge-test predictions; findings written up with figures (`docs/`), results/logs/artifacts committed. |
 | Clean-up and documentation | 0.9.0 | Shared modules (`common`, `metrics`), slimmer `train.py`, scripts moved to `scripts/`, `requirements.txt`, README rewritten and split into `docs/`; outputs verified identical to 0.8.0. |
 | Using the unlabeled data for supervision | 0.8.0 | Noisy-student pseudo-labelling pipeline; leaderboard-style metrics (macro/micro AUC, per-class F1); summary rows separated by experiment variant. |
 | Towards a leaderboard | 0.6.0 | Higher resolution, LoRA rank, extra unlabeled data for Phase 1 (e.g. DFUC2020), train-on-everything mode, ensemble + TTA inference and a submission-style CSV. |
+
+## [0.11.0] - 2026-10-01
+
+### Added
+
+- **Experiment results** (committed on `main`): `results/*.json` for all 27 runs + 3 final models,
+  `results/summary.csv`, `results/ensemble_round2.csv`, `logs/`, and `artifacts/` (groups,
+  pseudo-labels, challenge-test prediction CSVs).
+- **Documentation of all findings:** README rewritten around the results; `docs/METHODS.md`,
+  `docs/EXPERIMENTS.md` (E1–E9: why, setup, results, reading, limitations), `docs/LEADERBOARD.md`
+  (updated), `docs/results_tables.md` (generated), `results/README.md`, `logs/README.md`,
+  `artifacts/README.md`.
+- **Figures** (`docs/figures/`, 11 PNGs: pipeline flowchart, leakage, ablation, per-class F1, learning
+  curves, confusion matrices, ensembles, class-mix shift, pseudo-labels, Phase-1 loss, summary) and
+  `scripts/make_figures.py` to regenerate figures and tables from the committed results.
+
+### Findings recorded
+
+- Random split leaks near-duplicates (22 % of test images at cosine >= 0.90); group-aware split drops
+  scratch macro-F1 0.880 -> 0.773.
+- Leak-free: Phase 1 +0.026 (3/3 seeds), + pseudo-labels +0.022 (3/3), strong aug + label smoothing
+  worse, 3-model ensemble +0.03, flip TTA +0.01-0.02; best 0.838 (3 models) / 0.847 (9 models) + TTA.
+- Challenge-test predictions show a class-mix shift (ischaemia 8-10 % vs 4 %); no leaderboard
+  submission made yet.
+
+### Changed
+
+- `csv files/` renamed to `artifacts/`; `results/dbg.json` and pre-flight logs removed from tracking;
+  `docs/CLUSTER.md` documents the one-shot suite.
 
 ## [0.10.0] - 2026-09-30
 
