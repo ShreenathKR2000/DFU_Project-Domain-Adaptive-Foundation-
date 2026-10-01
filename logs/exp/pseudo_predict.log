@@ -1,0 +1,7 @@
+/scratch/sraghunandanan/DFU_Project/.venv/lib64/python3.9/site-packages/networkx/utils/backends.py:135: RuntimeWarning: networkx backend defined more than once: nx-loopback
+  backends.update(_get_backends("networkx.backends"))
+Device: cuda   checkpoints: 3   TTA: True
+Predicting the 3994 unlabeled training images
+Predictions   → pseudo_g.csv
+Probabilities → pseudo_g_probs.csv
+Predicted class counts: {'none': 1808, 'infection': 1858, 'ischaemia': 173, 'both': 155}

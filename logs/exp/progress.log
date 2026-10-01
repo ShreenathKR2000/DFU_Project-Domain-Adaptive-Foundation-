@@ -1,0 +1,63 @@
+[  0m] Data: Data/DFUC2021_train  (9949 images).  Expect 9949 for the full DFUC2021 training set.
+[  0m] Budget 80 min, 2 parallel jobs, 8 data workers each, 20 epochs per run
+[  0m] Caching the DINOv2 model (needs internet once) ...
+[  0m] bf16 autocast: OK (enabled)
+[  0m] Computing near-duplicate groups ...
+--auto: largest allowed cluster 119 images -> threshold 0.85
+Using threshold 0.85: 3925 groups, largest 114
+random split           22.3%    3.8%    0.1%
+group-aware split       0.0%    0.0%    0.0%
+A large drop for the group-aware split confirms that random splits leak near-duplicates; use --group_csv for validation/model selection.
+[  0m] Phase-1 checkpoint found: checkpoints/dfu_pretrained_backbone.pt (skipping pre-training)
+[  0m] START g_scratch_basic_s0
+[  0m] START g_pre_basic_s0
+g_scratch_basic_s0 finished
+[  5m] START g_scratch_reg_s0
+g_pre_basic_s0 finished
+[  5m] START g_pre_reg_s0
+g_scratch_reg_s0 finished
+g_pre_reg_s0 finished
+[ 10m] stage done — longest job so far: 5 min
+[ 10m] START g_scratch_reg_s1
+[ 10m] START g_scratch_reg_s2
+g_scratch_reg_s2 finished
+g_scratch_reg_s1 finished
+[ 15m] stage done — longest job so far: 5 min
+[ 15m] Pseudo-labelling the unlabeled images with 3 teacher(s) + flip TTA ...
+Predicted class counts: {'none': 1808, 'infection': 1858, 'ischaemia': 173, 'both': 155}
+[ 17m] START g_student_s0
+[ 17m] START g_scratch_basic_s1
+g_scratch_basic_s1 finished
+[ 22m] START g_pre_basic_s1
+g_student_s0 finished
+[ 22m] START g_pre_reg_s1
+g_pre_basic_s1 finished
+g_pre_reg_s1 finished
+[ 27m] stage done — longest job so far: 5 min
+[ 27m] START g_student_s1
+[ 27m] START g_student_s2
+g_student_s2 finished
+[ 32m] START g_scratch_basic_s2
+g_student_s1 finished
+[ 32m] START g_pre_basic_s2
+g_scratch_basic_s2 finished
+[ 37m] START g_pre_reg_s2
+g_pre_basic_s2 finished
+g_pre_reg_s2 finished
+[ 40m] stage done — longest job so far: 5 min
+[ 40m] Ensemble / TTA evaluation ...
+[ 40m] ensemble scratch_reg (3 models): ensemble: macro-F1=0.7974  bal_acc=0.811  acc=0.820  macro_auc=0.9272
+[ 41m] ensemble scratch_reg + TTA (3 models): ensemble + TTA: macro-F1=0.8191  bal_acc=0.827  acc=0.831  macro_auc=0.9274
+[ 41m] ensemble pre_reg (3 models): ensemble: macro-F1=0.8120  bal_acc=0.818  acc=0.804  macro_auc=0.9219
+[ 41m] ensemble pre_reg + TTA (3 models): ensemble + TTA: macro-F1=0.8228  bal_acc=0.823  acc=0.807  macro_auc=0.9210
+[ 42m] ensemble scratch_basic (3 models): ensemble: macro-F1=0.8018  bal_acc=0.800  acc=0.820  macro_auc=0.9469
+[ 42m] ensemble scratch_basic + TTA (3 models): ensemble + TTA: macro-F1=0.8093  bal_acc=0.810  acc=0.811  macro_auc=0.9502
+[ 42m] ensemble student (3 models): ensemble: macro-F1=0.8049  bal_acc=0.816  acc=0.825  macro_auc=0.9221
+[ 43m] ensemble student + TTA (3 models): ensemble + TTA: macro-F1=0.8209  bal_acc=0.829  acc=0.836  macro_auc=0.9284
+[ 43m] Summary (group-aware split; one row per condition):
+Experiment run finished after 43 min.
+Skipped jobs: none
+Failed jobs : 0  (see logs/exp/<name>.log)
+Pseudo-labels: Pseudo-labels: +811 images  {'none': 400, 'infection': 280, 'ischaemia': 63, 'both': 68}
+Groups: Using threshold 0.85: 3925 groups, largest 114
+[ 43m] Done. Key files: results/summary.csv  results/*.json  logs/exp/summary.txt  logs/exp/ens_*.txt

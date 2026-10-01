@@ -1,0 +1,40 @@
+/scratch/sraghunandanan/DFU_Project/.venv/lib64/python3.9/site-packages/networkx/utils/backends.py:135: RuntimeWarning: networkx backend defined more than once: nx-loopback
+  backends.update(_get_backends("networkx.backends"))
+Device    : cuda   bf16 autocast: True
+Debug     : False
+Epochs    : 20
+Batch     : 32
+LoRA      : checkpoints/dfu_pretrained_backbone.pt
+Seed      : 1 (split seed 1)
+Imbalance : weights
+Train frac: 1.0
+Img size  : 224   LoRA rank: 16
+Aug       : basic   label smoothing: 0.0
+Run name  : final_pre_pseudo_s1
+FINAL mode: training on all labeled images, no holdout evaluation
+Pseudo-labels: +887 images  {'none': 400, 'infection': 400, 'ischaemia': 42, 'both': 45}
+train split:  6842  {'none': 2952, 'infection': 2955, 'ischaemia': 269, 'both': 666}
+Loaded Phase-1 LoRA weights from checkpoints/dfu_pretrained_backbone.pt (48 LoRA tensors, 24 non-zero lora_B matrices)
+trainable params: 589,824 || all params: 87,170,304 || trainable%: 0.6766
+Epoch   1/20  loss=2.0746  ce=0.8664  con=3.2828  train_acc=0.633  (30.8s)
+Epoch   2/20  loss=1.9081  ce=0.6042  con=3.2120  train_acc=0.735  (30.7s)
+Epoch   3/20  loss=1.8329  ce=0.5156  con=3.1503  train_acc=0.770  (30.1s)
+Epoch   4/20  loss=1.7646  ce=0.4305  con=3.0986  train_acc=0.796  (30.3s)
+Epoch   5/20  loss=1.7264  ce=0.3887  con=3.0641  train_acc=0.811  (29.9s)
+Epoch   6/20  loss=1.6661  ce=0.3327  con=2.9996  train_acc=0.830  (29.9s)
+Epoch   7/20  loss=1.6074  ce=0.2703  con=2.9446  train_acc=0.853  (29.9s)
+Epoch   8/20  loss=1.5954  ce=0.2696  con=2.9212  train_acc=0.864  (30.5s)
+Epoch   9/20  loss=1.5467  ce=0.2211  con=2.8723  train_acc=0.876  (30.4s)
+Epoch  10/20  loss=1.5275  ce=0.2077  con=2.8473  train_acc=0.893  (30.4s)
+Epoch  11/20  loss=1.4908  ce=0.1752  con=2.8064  train_acc=0.899  (30.5s)
+Epoch  12/20  loss=1.4770  ce=0.1768  con=2.7772  train_acc=0.911  (30.4s)
+Epoch  13/20  loss=1.4328  ce=0.1345  con=2.7311  train_acc=0.924  (30.4s)
+Epoch  14/20  loss=1.3848  ce=0.1020  con=2.6676  train_acc=0.943  (30.3s)
+Epoch  15/20  loss=1.3715  ce=0.0979  con=2.6451  train_acc=0.948  (30.3s)
+Epoch  16/20  loss=1.3508  ce=0.0821  con=2.6195  train_acc=0.955  (30.4s)
+Epoch  17/20  loss=1.3614  ce=0.0966  con=2.6263  train_acc=0.955  (30.5s)
+Epoch  18/20  loss=1.3228  ce=0.0670  con=2.5786  train_acc=0.964  (30.6s)
+Epoch  19/20  loss=1.2928  ce=0.0491  con=2.5366  train_acc=0.975  (30.6s)
+Epoch  20/20  loss=1.2991  ce=0.0603  con=2.5380  train_acc=0.972  (30.6s)
+
+Final weights → checkpoints/final_pre_pseudo_s1_final.pt

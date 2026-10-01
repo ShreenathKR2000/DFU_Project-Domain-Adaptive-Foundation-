@@ -1,0 +1,13 @@
+/scratch/sraghunandanan/DFU_Project/.venv/lib64/python3.9/site-packages/networkx/utils/backends.py:135: RuntimeWarning: networkx backend defined more than once: nx-loopback
+  backends.update(_get_backends("networkx.backends"))
+Device: cuda   checkpoints: 3   TTA: True
+Evaluating on the 'test' split (813 images, split seed 0)
+  g_scratch_reg_s0_best.pt                 macro-F1=0.7887  acc=0.802
+  g_scratch_reg_s1_best.pt                 macro-F1=0.7885  acc=0.815
+  g_scratch_reg_s2_best.pt                 macro-F1=0.7922  acc=0.809
+
+ensemble + TTA: macro-F1=0.8191  bal_acc=0.827  acc=0.831  macro_auc=0.9274
+  none       P=0.862  R=0.814  F1=0.837  n=376
+  infection  P=0.811  R=0.839  F1=0.824  n=347
+  ischaemia  P=0.800  R=0.690  F1=0.741  n=29
+  both       P=0.797  R=0.967  F1=0.874  n=61

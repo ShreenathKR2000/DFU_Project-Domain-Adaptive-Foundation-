@@ -34,21 +34,13 @@ import argparse
 import os
 import time
 
+import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 
-from src.dataset import (
-    DFUDataset,
-    get_train_transforms,
-    load_and_split_csv,
-)
+from src.common import CSV_PATH, IMG_DIR, build_loader, enable_tf32
+from src.dataset import get_train_transforms, load_and_split_csv
 from src.pretrain_model import DFUDinoLoRAForMIM
-
-# ── paths (relative to project root) ────────────────────────────────────────
-
-DATA_DIR = os.path.join("Data", "DFUC2021_train")
-CSV_PATH = os.path.join(DATA_DIR, "train.csv")
-IMG_DIR  = os.path.join(DATA_DIR, "images")
 
 # ── defaults ─────────────────────────────────────────────────────────────────
 
@@ -78,6 +70,21 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--lr",         type=float, default=DEFAULT_LR)
     p.add_argument("--mask_ratio", type=float, default=DEFAULT_MASK_RATIO)
     p.add_argument(
+        "--extra_img_dirs", nargs="*", default=[],
+        help="Extra directories of unlabeled images (e.g. DFUC2020) added to the "
+             "3,994 unlabeled DFUC2021 images for pre-training.",
+    )
+    p.add_argument(
+        "--img_size", type=int, default=224,
+        help="Input resolution; must be a multiple of the patch size (14).",
+    )
+    p.add_argument("--lora_rank",   type=int,   default=16,
+                   help="LoRA rank (alpha = 2 x rank).")
+    p.add_argument("--amp", action="store_true",
+                   help="bfloat16 autocast on CUDA (faster).")
+    p.add_argument("--seed",        type=int,   default=0)
+    p.add_argument("--num_workers", type=int,   default=2)
+    p.add_argument(
         "--loss_fn", choices=["l1", "mse"], default="l1",
         help="Reconstruction loss function (default: l1).",
     )
@@ -86,19 +93,6 @@ def parse_args() -> argparse.Namespace:
 
 # ── data ─────────────────────────────────────────────────────────────────────
 
-def build_loader(
-    df, img_dir: str, transform, batch_size: int, shuffle: bool = True
-) -> DataLoader:
-    ds = DFUDataset(df, img_dir, transform=transform)
-    return DataLoader(
-        ds,
-        batch_size=batch_size,
-        shuffle=shuffle,
-        num_workers=2,
-        pin_memory=True,
-    )
-
-
 # ── one epoch ────────────────────────────────────────────────────────────────
 
 def train_one_epoch(
@@ -106,6 +100,7 @@ def train_one_epoch(
     loader: DataLoader,
     optimizer: torch.optim.Optimizer,
     device: torch.device,
+    amp: bool = False,
 ) -> dict[str, float]:
     model.train()
     total_loss = 0.0
@@ -116,7 +111,9 @@ def train_one_epoch(
         images = batch[0] if isinstance(batch, (list, tuple)) else batch
         images = images.to(device)
 
-        loss, _pred, _mask = model(images)
+        with torch.autocast(device.type, dtype=torch.bfloat16, enabled=amp):
+            loss, _pred, _mask = model(images)
+        loss = loss.float()
 
         optimizer.zero_grad()
         loss.backward()
@@ -138,6 +135,9 @@ def main() -> None:
     batch_size = args.batch_size or (DEBUG_BATCH_SIZE  if debug else DEFAULT_BATCH_SIZE)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    torch.manual_seed(args.seed)
+    enable_tf32()
+    amp = args.amp and device.type == "cuda"
 
     print(f"{'─' * 60}")
     print(f"  SimMIM Pre-training  (Domain-Adaptive Phase 1)")
@@ -157,14 +157,36 @@ def main() -> None:
         unlabeled_df = unlabeled_df.head(DEBUG_SAMPLES)
         print(f"Debug subset   : {len(unlabeled_df)} images")
 
+    img_dir = IMG_DIR
+    if args.img_size % 14:
+        raise SystemExit("--img_size must be a multiple of 14")
+    if args.extra_img_dirs:
+        # Switch to absolute paths so images from several directories can be mixed.
+        extra = []
+        for d in args.extra_img_dirs:
+            names = sorted(f for f in os.listdir(d)
+                           if f.lower().endswith((".jpg", ".jpeg", ".png")))
+            print(f"Extra images   : {len(names):>6}  from {d}")
+            extra += [os.path.abspath(os.path.join(d, f)) for f in names]
+        base = unlabeled_df[["image"]].copy()
+        base["image"] = [os.path.abspath(os.path.join(IMG_DIR, f)) for f in base["image"]]
+        unlabeled_df = pd.concat([base, pd.DataFrame({"image": extra})], ignore_index=True)
+        img_dir = ""
+        print(f"Total pre-training images: {len(unlabeled_df)}")
+        if debug:
+            unlabeled_df = unlabeled_df.tail(DEBUG_SAMPLES)
+
     loader = build_loader(
-        unlabeled_df, IMG_DIR, get_train_transforms(), batch_size
+        unlabeled_df, img_dir, get_train_transforms(args.img_size), batch_size,
+        num_workers=args.num_workers,
     )
 
     # ── model ────────────────────────────────────────────────────────────
     model = DFUDinoLoRAForMIM(
         mask_ratio=args.mask_ratio,
         loss_fn=args.loss_fn,
+        lora_rank=args.lora_rank,
+        lora_alpha=2 * args.lora_rank,
     )
     model.to(device)
     model.print_trainable_parameters()
@@ -179,7 +201,7 @@ def main() -> None:
     # ── training loop ────────────────────────────────────────────────────
     for epoch in range(1, epochs + 1):
         t0 = time.time()
-        metrics = train_one_epoch(model, loader, optimizer, device)
+        metrics = train_one_epoch(model, loader, optimizer, device, amp=amp)
         elapsed = time.time() - t0
         print(
             f"Epoch {epoch:>3}/{epochs}  "

@@ -1,0 +1,201 @@
+nohup: ignoring input
+/scratch/sraghunandanan/DFU_Project/.venv/lib64/python3.9/site-packages/networkx/utils/backends.py:135: RuntimeWarning: networkx backend defined more than once: nx-loopback
+  backends.update(_get_backends("networkx.backends"))
+────────────────────────────────────────────────────────────
+  SimMIM Pre-training  (Domain-Adaptive Phase 1)
+────────────────────────────────────────────────────────────
+Device     : cuda
+Debug      : False
+Epochs     : 100
+Batch      : 32
+Mask ratio : 0.6
+Loss       : l1
+Unlabeled imgs : 3994
+trainable params: 589,824 || all params: 87,170,304 || trainable%: 0.6766
+decoder params : 453,708
+Epoch   1/100  loss=0.392868  (17.4s)
+Epoch   2/100  loss=0.223370  (17.1s)
+Epoch   3/100  loss=0.188265  (17.5s)
+Epoch   4/100  loss=0.172463  (17.2s)
+Epoch   5/100  loss=0.160368  (17.2s)
+Epoch   6/100  loss=0.149294  (17.2s)
+Epoch   7/100  loss=0.143197  (17.2s)
+Epoch   8/100  loss=0.137725  (17.2s)
+Epoch   9/100  loss=0.134925  (17.2s)
+Epoch  10/100  loss=0.131241  (17.2s)
+Epoch  11/100  loss=0.129688  (17.2s)
+Epoch  12/100  loss=0.127652  (17.2s)
+Epoch  13/100  loss=0.125450  (17.2s)
+Epoch  14/100  loss=0.123537  (17.2s)
+Epoch  15/100  loss=0.121861  (17.2s)
+Epoch  16/100  loss=0.121748  (17.2s)
+Epoch  17/100  loss=0.119686  (17.2s)
+Epoch  18/100  loss=0.117651  (17.2s)
+Epoch  19/100  loss=0.117352  (17.2s)
+Epoch  20/100  loss=0.118641  (17.2s)
+Epoch  21/100  loss=0.116597  (17.2s)
+Epoch  22/100  loss=0.114866  (17.2s)
+Epoch  23/100  loss=0.114536  (17.2s)
+Epoch  24/100  loss=0.113709  (17.2s)
+Epoch  25/100  loss=0.112467  (17.2s)
+Epoch  26/100  loss=0.113289  (17.3s)
+Epoch  27/100  loss=0.111982  (17.2s)
+Epoch  28/100  loss=0.111991  (17.2s)
+Epoch  29/100  loss=0.110983  (17.2s)
+Epoch  30/100  loss=0.110966  (17.2s)
+Epoch  31/100  loss=0.109897  (17.2s)
+Epoch  32/100  loss=0.110304  (17.2s)
+Epoch  33/100  loss=0.109772  (17.2s)
+Epoch  34/100  loss=0.108750  (17.2s)
+Epoch  35/100  loss=0.108691  (17.1s)
+Epoch  36/100  loss=0.107797  (17.2s)
+Epoch  37/100  loss=0.107481  (17.1s)
+Epoch  38/100  loss=0.107061  (17.1s)
+Epoch  39/100  loss=0.107562  (17.1s)
+Epoch  40/100  loss=0.106466  (17.2s)
+Epoch  41/100  loss=0.106004  (17.1s)
+Epoch  42/100  loss=0.106805  (17.1s)
+Epoch  43/100  loss=0.106152  (17.1s)
+Epoch  44/100  loss=0.105898  (17.2s)
+Epoch  45/100  loss=0.104893  (17.1s)
+Epoch  46/100  loss=0.105054  (17.1s)
+Epoch  47/100  loss=0.104382  (17.1s)
+Epoch  48/100  loss=0.104108  (17.1s)
+Epoch  49/100  loss=0.104586  (17.1s)
+Epoch  50/100  loss=0.104143  (17.1s)
+Epoch  51/100  loss=0.103112  (17.1s)
+Epoch  52/100  loss=0.103268  (17.1s)
+Epoch  53/100  loss=0.102744  (17.1s)
+Epoch  54/100  loss=0.103775  (17.1s)
+Epoch  55/100  loss=0.103813  (17.1s)
+Epoch  56/100  loss=0.102135  (17.1s)
+Epoch  57/100  loss=0.102669  (17.1s)
+Epoch  58/100  loss=0.102073  (17.1s)
+Epoch  59/100  loss=0.102199  (17.1s)
+Epoch  60/100  loss=0.101863  (17.1s)
+Epoch  61/100  loss=0.101627  (17.2s)
+Epoch  62/100  loss=0.100760  (17.1s)
+Epoch  63/100  loss=0.101297  (17.1s)
+Epoch  64/100  loss=0.101147  (17.1s)
+Epoch  65/100  loss=0.100834  (17.1s)
+Epoch  66/100  loss=0.101034  (17.1s)
+Epoch  67/100  loss=0.100591  (17.1s)
+Epoch  68/100  loss=0.100463  (17.1s)
+Epoch  69/100  loss=0.101001  (17.1s)
+Epoch  70/100  loss=0.100044  (17.1s)
+Epoch  71/100  loss=0.099454  (17.2s)
+Epoch  72/100  loss=0.100577  (17.1s)
+Epoch  73/100  loss=0.098875  (17.1s)
+Epoch  74/100  loss=0.099070  (17.1s)
+Epoch  75/100  loss=0.099000  (17.1s)
+Epoch  76/100  loss=0.099585  (17.1s)
+Epoch  77/100  loss=0.099254  (17.1s)
+Epoch  78/100  loss=0.098386  (17.1s)
+Epoch  79/100  loss=0.099103  (17.1s)
+Epoch  80/100  loss=0.098800  (17.2s)
+Epoch  81/100  loss=0.098473  (17.1s)
+Epoch  82/100  loss=0.097681  (17.1s)
+Epoch  83/100  loss=0.097872  (17.1s)
+Epoch  84/100  loss=0.098561  (17.2s)
+Epoch  85/100  loss=0.097467  (17.1s)
+Epoch  86/100  loss=0.098152  (17.1s)
+Epoch  87/100  loss=0.097747  (17.1s)
+Epoch  88/100  loss=0.097176  (17.1s)
+Epoch  89/100  loss=0.097537  (17.1s)
+Epoch  90/100  loss=0.097666  (17.1s)
+Epoch  91/100  loss=0.096984  (17.1s)
+Epoch  92/100  loss=0.097563  (17.1s)
+Epoch  93/100  loss=0.097577  (17.2s)
+Epoch  94/100  loss=0.097521  (17.1s)
+Epoch  95/100  loss=0.096658  (17.1s)
+Epoch  96/100  loss=0.097728  (17.1s)
+Epoch  97/100  loss=0.096968  (17.1s)
+Epoch  98/100  loss=0.096536  (17.1s)
+Epoch  99/100  loss=0.096376  (17.1s)
+Epoch 100/100  loss=0.096059  (17.1s)
+Full pretrain model  → checkpoints/dfu_pretrain_mim.pt
+Backbone LoRA weights → checkpoints/dfu_pretrained_backbone.pt
+/scratch/sraghunandanan/DFU_Project/.venv/lib64/python3.9/site-packages/networkx/utils/backends.py:135: RuntimeWarning: networkx backend defined more than once: nx-loopback
+  backends.update(_get_backends("networkx.backends"))
+Device    : cuda
+Debug     : False
+Epochs    : 30
+Batch     : 32
+LoRA      : scratch
+Seed      : 0 (split seed 0)
+Imbalance : weights
+Run name  : scratch_seed0
+train split:  4167  {'none': 1786, 'infection': 1787, 'ischaemia': 159, 'both': 435}
+val   split:   894  {'none': 383, 'infection': 384, 'ischaemia': 34, 'both': 93}
+test  split:   894  {'none': 383, 'infection': 384, 'ischaemia': 34, 'both': 93}
+trainable params: 589,824 || all params: 87,170,304 || trainable%: 0.6766
+Epoch   1/30  loss=2.2345  ce=0.9923  con=3.4767  train_acc=0.586  val_acc=0.681  val_f1=0.646  recall[none=0.78 infe=0.53 isch=0.62 both=0.89]  (20.7s)
+Epoch   2/30  loss=1.9709  ce=0.6888  con=3.2530  train_acc=0.713  val_acc=0.734  val_f1=0.689  recall[none=0.77 infe=0.69 isch=0.76 both=0.74]  (20.0s)
+Epoch   3/30  loss=1.8663  ce=0.5463  con=3.1862  train_acc=0.762  val_acc=0.772  val_f1=0.757  recall[none=0.82 infe=0.70 isch=0.79 both=0.86]  (20.1s)
+Epoch   4/30  loss=1.7954  ce=0.4508  con=3.1400  train_acc=0.783  val_acc=0.775  val_f1=0.777  recall[none=0.81 infe=0.71 isch=0.85 both=0.90]  (19.9s)
+Epoch   5/30  loss=1.7396  ce=0.3934  con=3.0858  train_acc=0.801  val_acc=0.792  val_f1=0.786  recall[none=0.78 infe=0.78 isch=0.85 both=0.90]  (20.0s)
+Epoch   6/30  loss=1.6805  ce=0.3358  con=3.0251  train_acc=0.821  val_acc=0.766  val_f1=0.777  recall[none=0.90 infe=0.60 isch=0.82 both=0.88]  (20.0s)
+Epoch   7/30  loss=1.6104  ce=0.2634  con=2.9573  train_acc=0.846  val_acc=0.784  val_f1=0.784  recall[none=0.81 infe=0.71 isch=0.79 both=0.98]  (20.0s)
+Epoch   8/30  loss=1.5944  ce=0.2509  con=2.9380  train_acc=0.857  val_acc=0.801  val_f1=0.818  recall[none=0.85 infe=0.72 isch=0.79 both=0.97]  (20.0s)
+Epoch   9/30  loss=1.5362  ce=0.1942  con=2.8781  train_acc=0.884  val_acc=0.817  val_f1=0.826  recall[none=0.87 infe=0.72 isch=0.85 both=0.96]  (20.0s)
+Epoch  10/30  loss=1.4936  ce=0.1660  con=2.8212  train_acc=0.900  val_acc=0.820  val_f1=0.827  recall[none=0.84 infe=0.78 isch=0.82 both=0.89]  (20.0s)
+Epoch  11/30  loss=1.4669  ce=0.1549  con=2.7788  train_acc=0.908  val_acc=0.824  val_f1=0.829  recall[none=0.79 infe=0.83 isch=0.88 both=0.94]  (20.0s)
+Epoch  12/30  loss=1.4276  ce=0.1255  con=2.7297  train_acc=0.932  val_acc=0.815  val_f1=0.815  recall[none=0.86 infe=0.73 isch=0.88 both=0.96]  (20.0s)
+Epoch  13/30  loss=1.4059  ce=0.1221  con=2.6897  train_acc=0.937  val_acc=0.847  val_f1=0.863  recall[none=0.85 infe=0.82 isch=0.82 both=0.97]  (20.1s)
+Epoch  14/30  loss=1.3550  ce=0.0851  con=2.6250  train_acc=0.949  val_acc=0.865  val_f1=0.864  recall[none=0.86 infe=0.86 isch=0.71 both=0.95]  (20.0s)
+Epoch  15/30  loss=1.3293  ce=0.0749  con=2.5836  train_acc=0.960  val_acc=0.848  val_f1=0.856  recall[none=0.78 infe=0.89 isch=0.79 both=0.97]  (20.0s)
+Epoch  16/30  loss=1.3357  ce=0.0892  con=2.5822  train_acc=0.958  val_acc=0.834  val_f1=0.832  recall[none=0.81 infe=0.83 isch=0.79 both=0.99]  (20.0s)
+Epoch  17/30  loss=1.2875  ce=0.0554  con=2.5195  train_acc=0.974  val_acc=0.858  val_f1=0.877  recall[none=0.91 infe=0.78 isch=0.85 both=0.97]  (20.0s)
+Epoch  18/30  loss=1.2842  ce=0.0520  con=2.5164  train_acc=0.974  val_acc=0.857  val_f1=0.866  recall[none=0.85 infe=0.83 isch=0.88 both=0.99]  (20.0s)
+Epoch  19/30  loss=1.2746  ce=0.0478  con=2.5015  train_acc=0.978  val_acc=0.860  val_f1=0.862  recall[none=0.86 infe=0.84 isch=0.79 both=0.97]  (20.0s)
+Epoch  20/30  loss=1.2501  ce=0.0291  con=2.4711  train_acc=0.986  val_acc=0.870  val_f1=0.861  recall[none=0.85 infe=0.88 isch=0.71 both=0.98]  (20.0s)
+Epoch  21/30  loss=1.2521  ce=0.0331  con=2.4710  train_acc=0.985  val_acc=0.868  val_f1=0.873  recall[none=0.83 infe=0.90 isch=0.85 both=0.89]  (20.0s)
+Epoch  22/30  loss=1.2462  ce=0.0354  con=2.4571  train_acc=0.986  val_acc=0.850  val_f1=0.857  recall[none=0.77 infe=0.90 isch=0.82 both=0.96]  (20.0s)
+Epoch  23/30  loss=1.2477  ce=0.0327  con=2.4628  train_acc=0.985  val_acc=0.865  val_f1=0.867  recall[none=0.93 infe=0.78 isch=0.88 both=0.95]  (20.0s)
+Epoch  24/30  loss=1.2346  ce=0.0259  con=2.4434  train_acc=0.988  val_acc=0.869  val_f1=0.876  recall[none=0.90 infe=0.83 isch=0.79 both=0.95]  (19.9s)
+Epoch  25/30  loss=1.2484  ce=0.0355  con=2.4613  train_acc=0.982  val_acc=0.870  val_f1=0.867  recall[none=0.82 infe=0.91 isch=0.76 both=0.96]  (19.9s)
+Epoch  26/30  loss=1.2159  ce=0.0159  con=2.4159  train_acc=0.992  val_acc=0.881  val_f1=0.880  recall[none=0.90 infe=0.85 isch=0.88 both=0.94]  (20.0s)
+Epoch  27/30  loss=1.2380  ce=0.0323  con=2.4436  train_acc=0.987  val_acc=0.870  val_f1=0.861  recall[none=0.85 infe=0.87 isch=0.82 both=0.96]  (20.0s)
+Epoch  28/30  loss=1.2259  ce=0.0258  con=2.4261  train_acc=0.990  val_acc=0.878  val_f1=0.874  recall[none=0.86 infe=0.88 isch=0.88 both=0.95]  (20.0s)
+Epoch  29/30  loss=1.2215  ce=0.0197  con=2.4234  train_acc=0.991  val_acc=0.870  val_f1=0.856  recall[none=0.89 infe=0.84 isch=0.88 both=0.92]  (19.9s)
+Epoch  30/30  loss=1.2234  ce=0.0176  con=2.4292  train_acc=0.991  val_acc=0.881  val_f1=0.878  recall[none=0.87 infe=0.89 isch=0.79 both=0.94]  (19.9s)
+
+Best epoch 26 (val macro-F1 0.8796) → test:
+  acc=0.897  bal_acc=0.903  macro_f1=0.8982
+  none       P=0.890  R=0.911  F1=0.901  n=383
+  infection  P=0.901  R=0.872  F1=0.886  n=384
+  ischaemia  P=0.857  R=0.882  F1=0.870  n=34
+  both       P=0.926  R=0.946  F1=0.936  n=93
+  confusion matrix (rows=true, cols=pred ['none', 'infection', 'ischaemia', 'both']):
+    [349, 33, 0, 1]
+    [43, 335, 2, 4]
+    [0, 2, 30, 2]
+    [0, 2, 3, 88]
+
+Best weights → checkpoints/scratch_seed0_best.pt
+Results      → results/scratch_seed0.json
+/scratch/sraghunandanan/DFU_Project/.venv/lib64/python3.9/site-packages/networkx/utils/backends.py:135: RuntimeWarning: networkx backend defined more than once: nx-loopback
+  backends.update(_get_backends("networkx.backends"))
+Traceback (most recent call last):
+  File "/usr/lib64/python3.9/runpy.py", line 197, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/usr/lib64/python3.9/runpy.py", line 87, in _run_code
+    exec(code, run_globals)
+  File "/scratch/sraghunandanan/DFU_Project/src/train.py", line 395, in <module>
+    main()
+  File "/scratch/sraghunandanan/DFU_Project/src/train.py", line 303, in main
+    model = DFUDinoLoRA(pretrained_lora_path=args.pretrained_lora_path)
+  File "/scratch/sraghunandanan/DFU_Project/src/model.py", line 91, in __init__
+    raise RuntimeError(
+RuntimeError: Phase-1 LoRA weights from checkpoints/dfu_pretrained_backbone.pt were not applied.
+Device    : cuda
+Debug     : False
+Epochs    : 30
+Batch     : 32
+LoRA      : checkpoints/dfu_pretrained_backbone.pt
+Seed      : 0 (split seed 0)
+Imbalance : weights
+Run name  : pretrained_seed0
+train split:  4167  {'none': 1786, 'infection': 1787, 'ischaemia': 159, 'both': 435}
+val   split:   894  {'none': 383, 'infection': 384, 'ischaemia': 34, 'both': 93}
+test  split:   894  {'none': 383, 'infection': 384, 'ischaemia': 34, 'both': 93}

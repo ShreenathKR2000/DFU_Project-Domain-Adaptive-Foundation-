@@ -1,0 +1,56 @@
+/scratch/sraghunandanan/DFU_Project/.venv/lib64/python3.9/site-packages/networkx/utils/backends.py:135: RuntimeWarning: networkx backend defined more than once: nx-loopback
+  backends.update(_get_backends("networkx.backends"))
+Device    : cuda   bf16 autocast: True
+Debug     : False
+Epochs    : 20
+Batch     : 32
+LoRA      : checkpoints/dfu_pretrained_backbone.pt
+Seed      : 1 (split seed 0)
+Imbalance : weights
+Train frac: 1.0
+Img size  : 224   LoRA rank: 16
+Aug       : basic   label smoothing: 0.0
+Run name  : g_pre_pseudo_s1
+Group-aware split using groups.csv (3925 groups)
+Pseudo-labels: +887 images  {'none': 400, 'infection': 400, 'ischaemia': 42, 'both': 45}
+train split:  5219  {'none': 2216, 'infection': 2270, 'ischaemia': 210, 'both': 523}
+val   split:   810  {'none': 360, 'infection': 338, 'ischaemia': 30, 'both': 82}
+test  split:   813  {'none': 376, 'infection': 347, 'ischaemia': 29, 'both': 61}
+Loaded Phase-1 LoRA weights from checkpoints/dfu_pretrained_backbone.pt (48 LoRA tensors, 24 non-zero lora_B matrices)
+trainable params: 589,824 || all params: 87,170,304 || trainable%: 0.6766
+Epoch   1/20  loss=2.0955  ce=0.9087  con=3.2823  train_acc=0.599  val_acc=0.653  val_f1=0.610  recall[none=0.82 infe=0.47 isch=0.57 both=0.73]  (25.3s)
+Epoch   2/20  loss=1.9233  ce=0.6381  con=3.2085  train_acc=0.727  val_acc=0.691  val_f1=0.663  recall[none=0.74 infe=0.62 isch=0.87 both=0.72]  (24.4s)
+Epoch   3/20  loss=1.8471  ce=0.5317  con=3.1624  train_acc=0.768  val_acc=0.696  val_f1=0.670  recall[none=0.90 infe=0.46 isch=0.73 both=0.76]  (24.4s)
+Epoch   4/20  loss=1.7895  ce=0.4595  con=3.1196  train_acc=0.788  val_acc=0.721  val_f1=0.711  recall[none=0.85 infe=0.53 isch=0.87 both=0.87]  (24.6s)
+Epoch   5/20  loss=1.7356  ce=0.4049  con=3.0664  train_acc=0.811  val_acc=0.738  val_f1=0.746  recall[none=0.70 infe=0.76 isch=0.70 both=0.84]  (24.7s)
+Epoch   6/20  loss=1.6832  ce=0.3495  con=3.0170  train_acc=0.819  val_acc=0.709  val_f1=0.701  recall[none=0.56 infe=0.81 isch=0.83 both=0.89]  (24.6s)
+Epoch   7/20  loss=1.6571  ce=0.3341  con=2.9802  train_acc=0.839  val_acc=0.698  val_f1=0.693  recall[none=0.59 infe=0.75 isch=0.80 both=0.93]  (24.5s)
+Epoch   8/20  loss=1.6179  ce=0.2883  con=2.9474  train_acc=0.852  val_acc=0.741  val_f1=0.722  recall[none=0.90 infe=0.55 isch=0.60 both=0.89]  (24.3s)
+Epoch   9/20  loss=1.5858  ce=0.2473  con=2.9243  train_acc=0.863  val_acc=0.759  val_f1=0.731  recall[none=0.72 infe=0.79 isch=0.53 both=0.91]  (24.1s)
+Epoch  10/20  loss=1.5614  ce=0.2413  con=2.8816  train_acc=0.875  val_acc=0.744  val_f1=0.702  recall[none=0.69 infe=0.81 isch=0.43 both=0.84]  (24.3s)
+Epoch  11/20  loss=1.5365  ce=0.2163  con=2.8567  train_acc=0.881  val_acc=0.783  val_f1=0.787  recall[none=0.74 infe=0.81 isch=0.77 both=0.84]  (24.0s)
+Epoch  12/20  loss=1.4863  ce=0.1737  con=2.7988  train_acc=0.901  val_acc=0.772  val_f1=0.779  recall[none=0.87 infe=0.67 isch=0.77 both=0.78]  (24.5s)
+Epoch  13/20  loss=1.4846  ce=0.1714  con=2.7979  train_acc=0.907  val_acc=0.768  val_f1=0.759  recall[none=0.71 infe=0.83 isch=0.63 both=0.83]  (24.5s)
+Epoch  14/20  loss=1.4376  ce=0.1401  con=2.7351  train_acc=0.920  val_acc=0.798  val_f1=0.803  recall[none=0.87 infe=0.70 isch=0.80 both=0.87]  (24.6s)
+Epoch  15/20  loss=1.4227  ce=0.1296  con=2.7159  train_acc=0.927  val_acc=0.790  val_f1=0.769  recall[none=0.81 infe=0.75 isch=0.67 both=0.91]  (24.8s)
+Epoch  16/20  loss=1.3894  ce=0.1103  con=2.6685  train_acc=0.941  val_acc=0.785  val_f1=0.753  recall[none=0.81 infe=0.78 isch=0.70 both=0.73]  (24.8s)
+Epoch  17/20  loss=1.3996  ce=0.1414  con=2.6577  train_acc=0.944  val_acc=0.788  val_f1=0.742  recall[none=0.89 infe=0.67 isch=0.57 both=0.90]  (24.6s)
+Epoch  18/20  loss=1.3505  ce=0.0830  con=2.6180  train_acc=0.954  val_acc=0.788  val_f1=0.776  recall[none=0.76 infe=0.79 isch=0.77 both=0.89]  (24.5s)
+Epoch  19/20  loss=1.3294  ce=0.0729  con=2.5858  train_acc=0.959  val_acc=0.788  val_f1=0.763  recall[none=0.80 infe=0.77 isch=0.67 both=0.84]  (24.6s)
+Epoch  20/20  loss=1.3161  ce=0.0636  con=2.5686  train_acc=0.964  val_acc=0.795  val_f1=0.786  recall[none=0.84 infe=0.74 isch=0.80 both=0.82]  (24.7s)
+
+Best epoch 14 (val macro-F1 0.8032) → test:
+  acc=0.824  bal_acc=0.847  macro_f1=0.8206  macro_auc=0.9371
+  last epoch (20): macro_f1=0.8225  acc=0.829
+  none       P=0.805  R=0.867  F1=0.835  n=376
+  infection  P=0.857  R=0.758  F1=0.804  n=347
+  ischaemia  P=0.667  R=0.828  F1=0.738  n=29
+  both       P=0.877  R=0.934  F1=0.905  n=61
+  confusion matrix (rows=true, cols=pred ['none', 'infection', 'ischaemia', 'both']):
+    [326, 41, 7, 2]
+    [77, 263, 4, 3]
+    [1, 1, 24, 3]
+    [1, 2, 1, 57]
+
+Best weights → checkpoints/g_pre_pseudo_s1_best.pt
+Results      → results/g_pre_pseudo_s1.json

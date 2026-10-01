@@ -7,6 +7,7 @@ Everything else in the backbone stays frozen.
 
 from __future__ import annotations
 
+import os
 from typing import Optional
 
 import torch
@@ -17,6 +18,13 @@ from transformers import Dinov2Model
 
 LABEL_NAMES = ["none", "infection", "ischaemia", "both"]
 NUM_CLASSES = len(LABEL_NAMES)
+
+
+def _lora_target_modules(backbone: nn.Module) -> list[str]:
+    """Q/V projection names: ``query``/``value`` (transformers 4.x) or
+    ``q_proj``/``v_proj`` (transformers 5.x)."""
+    names = {n.rsplit(".", 1)[-1] for n, _ in backbone.named_modules()}
+    return ["query", "value"] if "query" in names else ["q_proj", "v_proj"]
 
 
 class DFUDinoLoRA(nn.Module):
@@ -43,7 +51,7 @@ class DFUDinoLoRA(nn.Module):
 
     def __init__(
         self,
-        model_name = "facebook/dinov2-base",
+        model_name = os.environ.get("DFU_MODEL", "facebook/dinov2-base"),
         num_classes: int = NUM_CLASSES,
         lora_rank: int = 16,
         lora_alpha: int = 32,
@@ -62,7 +70,7 @@ class DFUDinoLoRA(nn.Module):
             r=lora_rank,
             lora_alpha=lora_alpha,
             lora_dropout=lora_dropout,
-            target_modules=["query", "value"],
+            target_modules=_lora_target_modules(backbone),
             bias="none",
         )
         self.backbone = get_peft_model(backbone, lora_config)
@@ -70,8 +78,32 @@ class DFUDinoLoRA(nn.Module):
         # 2b. (Optional) Load domain-adapted LoRA weights from Phase 1.
         if pretrained_lora_path is not None:
             state = torch.load(pretrained_lora_path, map_location="cpu")
-            set_peft_model_state_dict(self.backbone, state)
-            print(f"Loaded Phase-1 LoRA weights from {pretrained_lora_path}")
+            lora_state = {k: v for k, v in state.items() if "lora_" in k}
+            n_lora = len(lora_state)
+            if n_lora == 0:
+                raise ValueError(f"No LoRA tensors found in {pretrained_lora_path}")
+            # pretrain.py saves backbone.state_dict(), whose keys already match
+            # this model, so load them directly.  (Older peft versions'
+            # set_peft_model_state_dict re-inserts the adapter name and then
+            # silently ignores every key.)  Fall back to it for checkpoints
+            # saved with get_peft_model_state_dict.
+            result = self.backbone.load_state_dict(lora_state, strict=False)
+            if result.unexpected_keys:
+                set_peft_model_state_dict(self.backbone, state)
+            # LoRA B matrices start at zero, so if they are still all zero the
+            # load was silently ignored and the run would equal "scratch".
+            n_nonzero = sum(
+                1 for n, p in self.backbone.named_parameters()
+                if "lora_B" in n and p.abs().sum() > 0
+            )
+            if n_nonzero == 0:
+                raise RuntimeError(
+                    f"Phase-1 LoRA weights from {pretrained_lora_path} were not applied."
+                )
+            print(
+                f"Loaded Phase-1 LoRA weights from {pretrained_lora_path} "
+                f"({n_lora} LoRA tensors, {n_nonzero} non-zero lora_B matrices)"
+            )
 
         # 3. Classification head on top of the [CLS] token embedding.
         hidden_size = backbone.config.hidden_size  # 768 for ViT-B/14

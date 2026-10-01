@@ -1,0 +1,22 @@
+/scratch/sraghunandanan/DFU_Project/.venv/lib64/python3.9/site-packages/networkx/utils/backends.py:135: RuntimeWarning: networkx backend defined more than once: nx-loopback
+  backends.update(_get_backends("networkx.backends"))
+Embedding 5955 labeled images ...
+
+threshold   groups   largest   images-in-multi-image-groups
+  0.80       2220      2417       4478
+  0.85       3925       114       3095
+  0.90       4993         9       1637
+  0.95       5774         4        319
+  0.98       5951         2          8
+
+--auto: largest allowed cluster 119 images -> threshold 0.85
+
+Using threshold 0.85: 3925 groups, largest 114
+Groups → groups.csv
+
+Share of TEST images that have a TRAIN neighbour with cosine >= t
+                      t=0.90  t=0.95  t=0.98
+random split           22.3%    3.8%    0.1%
+group-aware split       0.0%    0.0%    0.0%
+
+A large drop for the group-aware split confirms that random splits leak near-duplicates; use --group_csv for validation/model selection.
