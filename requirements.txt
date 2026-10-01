@@ -1,0 +1,11 @@
+# PyTorch is installed separately to match your CUDA driver, e.g.
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+transformers>=4.40
+peft>=0.10
+pytorch-metric-learning>=2.3
+scikit-learn>=1.2
+scipy>=1.9
+pandas>=1.5
+numpy>=1.23
+Pillow>=9.0
+matplotlib>=3.6

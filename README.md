@@ -1,220 +1,112 @@
 # Domain-Adaptive Foundation Models for Fine-Grained DFU Classification
 
-Diabetic Foot Ulcer (DFU) classification using a frozen **DINOv2 ViT-B/14**
-backbone with **LoRA adapters** and **Supervised Contrastive Learning**.
+Diabetic Foot Ulcer (DFU) classification on **DFUC2021** with a frozen
+**DINOv2 ViT-B/14** backbone, **LoRA** adapters (0.68 % of the parameters) and
+**supervised contrastive learning**, plus self-supervised domain adaptation and
+pseudo-labelling of the unlabeled images.
 
-## Problem
+- **Task:** 4 classes — `none` (leaderboard: *Control*), `infection`, `ischaemia`, `both`.
+- **Data:** 5,955 labeled + 3,994 unlabeled training images; extreme imbalance
+  (`ischaemia` is ~4 % of the labels).
+- **Ranking metric (leaderboard):** macro-F1 — see [docs/LEADERBOARD.md](docs/LEADERBOARD.md).
 
-The DFUC2021 dataset exhibits two key challenges:
+## Status at a glance
 
-1. **Extreme class imbalance** — the four classes (*none*, *infection*,
-   *ischaemia*, *both*) are heavily skewed.
-2. **Partial labeling** — only 5,955 of 9,949 images carry ground-truth
-   labels; the remaining 3,994 are unlabeled.
+| Question | Answer so far |
+|---|---|
+| Does the pipeline run on the cluster GPU? | Yes (L40S, ~20 s / epoch, ~10 min per 30-epoch run) |
+| Internal result (random split, 3 seeds) | scratch **0.880 ± 0.017** vs Phase-1 **0.870 ± 0.010** test macro-F1 — no measurable benefit of Phase 1 |
+| Is that number comparable to the leaderboard? | **No.** Top-4 leaderboard entries have macro-F1 ≈ 0.65–0.66; the random split leaks near-duplicates and is over-optimistic |
+| Leak-free (group-aware) results | *pending — run `src.make_groups`, see [docs/EXPERIMENTS.md](docs/EXPERIMENTS.md)* |
+| Low-label / pseudo-labelling studies | *implemented, results pending* |
+| Leaderboard score of this approach | *to be filled in after submission* |
 
 ## Approach
 
-A **two-phase** training pipeline, both fitting within a **GTX 1650 (4 GB VRAM)**:
-
-### Phase 1 — Domain-Adaptive Pre-training (unsupervised)
-
-| Component | Detail |
-|---|---|
-| Data | 3,994 **unlabeled** DFU images |
-| Task | Masked Image Modeling (SimMIM-style) |
-| Masking | 60 % of 14×14 patches zeroed at the pixel level |
-| Decoder | LayerNorm + Linear (768 → 588) — reconstructs RGB patches |
-| Loss | L1 between predicted and original pixels (masked patches only) |
-| Trainable | LoRA adapters (Q/V) + decoder head |
-
-### Phase 2 — Supervised Fine-tuning
-
-| Component | Detail |
-|---|---|
-| Data | 5,955 **labeled** DFU images |
-| Backbone | `facebook/dinov2-base` (frozen) + pre-trained LoRA adapters |
-| Loss | 0.5 × CrossEntropy + 0.5 × SupConLoss (`pytorch-metric-learning`) |
-| Head | LayerNorm + Linear (768 → 4) |
-| Trainable | LoRA adapters + classification head |
-
-Only **0.68 % of parameters** are ever trainable, keeping GPU memory low.
-
-## Repository Structure
-
 ```
-DFU_Project/
-├── Data/                    # DFUC2021_train/ (not tracked by git)
-│   └── DFUC2021_train/
-│       ├── images/
-│       └── train.csv
-├── Notebooks/
-│   └── 01_data_explore.ipynb
-├── src/
-│   ├── __init__.py
-│   ├── dataset.py           # DFUDataset + transforms
-│   ├── model.py             # DFUDinoLoRA (DINOv2 + LoRA + head)
-│   ├── pretrain_model.py    # DFUDinoLoRAForMIM (MIM wrapper + decoder)
-│   ├── pretrain.py          # Phase 1: unsupervised MIM pre-training
-│   └── train.py             # Phase 2: supervised classification
-├── .gitignore
-├── CHANGELOG.md
-└── README.md
+unlabeled images ──► Phase 1: SimMIM masked-image modelling (LoRA + light decoder)
+(3,994 + optional extra)            │ domain-adapted LoRA weights
+                                    ▼
+labeled images ─────► Phase 2: CE + SupCon on [CLS], LoRA + linear head
+  ▲  group-aware split (no near-duplicate leakage)     │ teachers
+  │                                                    ▼
+  └──────── Phase 3: pseudo-label the unlabeled images → student (strong aug)
+                                                       ▼
+                       Inference: ensemble of models + flip TTA → submission CSV
 ```
 
-## Setup
+**How it differs from the usual DFUC2021 recipe** (supervised CNN ensembles on the
+5,955 labeled images, as far as I know): a *foundation model* adapted with very few
+trainable parameters (cheap, hard to overfit, so many ensemble members and
+pseudo-label rounds are affordable); *self-supervised adaptation* on the unlabeled
+images; a *leak-free evaluation protocol*; and all metrics reported like the
+leaderboard. Whether this beats CNN ensembles is an open empirical question —
+see [docs/LEADERBOARD.md](docs/LEADERBOARD.md) for an honest assessment.
 
-### 1. Create a Conda environment
+## Quick start
 
 ```bash
-conda create -n dfu python=3.10 -y
-conda activate dfu
-```
-
-### 2. Install PyTorch (CUDA 11.8 — adjust for your driver)
-
-```bash
+# 1. Environment (PyTorch build must match your CUDA driver)
+python -m venv .venv && source .venv/bin/activate
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+pip install -r requirements.txt
+
+# 2. Data: Data/DFUC2021_train/{images/*.jpg, train.csv}   (not tracked by git)
+
+# 3. Smoke test (20 images, seconds)
+python -m src.pretrain --debug && python -m src.train --debug
+
+# 4. Real runs (set --batch_size 32 on a large GPU)
+python -m src.pretrain --epochs 100 --batch_size 32 --num_workers 8
+python -m src.train --epochs 30 --batch_size 32 --imbalance weights --num_workers 8 \
+    --pretrained_lora_path checkpoints/dfu_pretrained_backbone.pt --run_name pretrained_seed0
 ```
 
-### 3. Install project dependencies
+Cluster / Slurm / VS Code instructions: [docs/CLUSTER.md](docs/CLUSTER.md).
 
-```bash
-pip install transformers peft pytorch-metric-learning pandas \
-            matplotlib Pillow scikit-learn
-```
+## Commands
 
-### 4. Place the dataset
+| Goal | Command |
+|---|---|
+| Phase 1 pre-training | `python -m src.pretrain [--epochs N --extra_img_dirs DIR ...]` |
+| Phase 2 training + held-out evaluation | `python -m src.train [--pretrained_lora_path ...]` |
+| Leak-free split (near-duplicate groups) | `python -m src.make_groups` then `--group_csv groups.csv` |
+| Regularisation for shift | `--aug strong --label_smoothing 0.1` |
+| **Everything in one go (~90 min GPU window)** | `nohup bash scripts/run_all_experiments.sh > logs/all.log 2>&1 &` |
+| Low-label study (10/25/50 % labels) | `./scripts/run_lowlabel.sh <seed>` |
+| Pseudo-labelling (teachers → student) | `GROUP_CSV=groups.csv ./scripts/run_pseudo.sh <split_seed>` |
+| Compare runs (leaderboard-style table, CSV, plot) | `python -m src.summarize` |
+| Final models on all labels | `python -m src.train --final --epochs 30 --run_name final1` |
+| Ensemble + TTA inference / submission CSV | `python -m src.predict --checkpoints ... (--split test \| --img_dir DIR)` |
+| Slurm | `sbatch --partition=<gpu> scripts/pretrain.sbatch` / `scripts/train_array.sbatch` |
 
-Download or symlink the DFUC2021 training data so that the project tree looks
-like:
-
-```
-DFU_Project/Data/DFUC2021_train/images/*.jpg
-DFU_Project/Data/DFUC2021_train/train.csv
-```
-
-## Usage
-
-### Phase 1 — Domain-Adaptive Pre-training
-
-Debug run (20 unlabeled images, batch_size=2, 2 epochs):
-
-```bash
-cd DFU_Project
-python -m src.pretrain --debug
-```
-
-Full pre-training run:
-
-```bash
-python -m src.pretrain
-```
-
-Override defaults:
-
-```bash
-python -m src.pretrain --epochs 30 --batch_size 4 --lr 5e-5 --mask_ratio 0.5
-```
-
-Outputs:
-- `checkpoints/dfu_pretrain_mim.pt` — full model (backbone + decoder), for
-  resuming pre-training.
-- `checkpoints/dfu_pretrained_backbone.pt` — LoRA weights only, for Phase 2.
-
-### Phase 2 — Supervised Fine-tuning
-
-Debug run (20 labeled images, batch_size=2, 2 epochs):
-
-```bash
-python -m src.train --debug
-```
-
-Full training run with Phase-1 pre-trained LoRA weights (recommended):
-
-```bash
-python -m src.train \
-    --pretrained_lora_path checkpoints/dfu_pretrained_backbone.pt
-```
-
-Full training run from scratch (no Phase-1 weights):
-
-```bash
-python -m src.train
-```
-
-Override defaults:
-
-```bash
-python -m src.train --epochs 30 --batch_size 4 --lr 5e-5 \
-    --pretrained_lora_path checkpoints/dfu_pretrained_backbone.pt
-```
-
-## Initial Results (Debug Runs)
-
-### Phase 1 — MIM Pre-training (debug)
+## Repository layout
 
 ```
-Device     : cuda
-Debug      : True
-Epochs     : 2
-Batch      : 2
-Mask ratio : 0.6
-Loss       : l1
-Unlabeled imgs : 3,994 (debug subset: 20)
-
-trainable params: 589,824 || all params: 87,170,304 || trainable%: 0.6766
-decoder params : 453,708
-
-Epoch 1/2  loss=0.757032  (3.0 s)
-Epoch 2/2  loss=0.659234  (1.8 s)
-
-Full pretrain model  → checkpoints/dfu_pretrain_mim.pt
-Backbone LoRA weights → checkpoints/dfu_pretrained_backbone.pt
+src/
+  dataset.py         data, transforms, splits (stratified / group-aware), pseudo-labels
+  common.py          paths, seeding, DataLoader factory
+  metrics.py         accuracy / macro-F1 / per-class F1 / AUC / confusion matrix
+  model.py           DFUDinoLoRA (DINOv2 + LoRA + head)
+  pretrain_model.py  SimMIM wrapper (Phase 1)
+  pretrain.py        Phase 1 entry point
+  train.py           Phase 2 entry point (+ --final, --train_frac, --pseudo_csv)
+  predict.py         ensemble + TTA inference, submission CSV, teacher predictions
+  make_groups.py     near-duplicate clustering and leak diagnostic
+  summarize.py       results table / CSV / plot, separated by experiment variant
+scripts/             run_lowlabel.sh, run_pseudo.sh, *.sbatch
+docs/                EXPERIMENTS.md, LEADERBOARD.md, CLUSTER.md
+Notebooks/           01_data_explore.ipynb (EDA)
+CHANGELOG.md         full history from the initial state
 ```
 
-**Observations** — Reconstruction loss drops from 0.757 → 0.659 (−13 %) across
-2 epochs on just 20 images, confirming the LoRA adapters + decoder learn to
-reconstruct masked patches.
+## Documentation
 
-### Phase 2 — Supervised Fine-tuning (debug)
-
-**From scratch** (no Phase-1 weights):
-
-```
-LoRA   : scratch
-Epoch 1/2  loss=0.5419  ce=1.0838  con=0.0000  acc=0.550  (2.3 s)
-Epoch 2/2  loss=0.4112  ce=0.8223  con=0.0000  acc=0.700  (1.9 s)
-```
-
-**With Phase-1 pre-trained LoRA weights** (`--pretrained_lora_path`):
-
-```
-LoRA   : checkpoints/dfu_pretrained_backbone.pt
-Loaded Phase-1 LoRA weights from checkpoints/dfu_pretrained_backbone.pt
-Epoch 1/2  loss=0.6986  ce=1.3972  con=0.0000  acc=0.400  (6.8 s)
-Epoch 2/2  loss=0.4085  ce=0.8170  con=0.0000  acc=0.750  (1.9 s)
-```
-
-| Init | Epoch 2 acc | Epoch 2 loss |
-|---|---|---|
-| Scratch | 70.0 % | 0.4112 |
-| Phase-1 LoRA | **75.0 %** | **0.4085** |
-
-**Observations** — Domain-adapted LoRA weights give +5 pp accuracy and lower
-final loss on the debug split. The gap is expected to grow on the full dataset.
-
-## Cluster / HPC Deployment
-
-The codebase is structured to be scheduler-agnostic. Once the target cluster
-environment is confirmed, a dedicated deployment script will be written for
-that specific setup.
-
-> **Note:** The training entry-points (`src/pretrain` and `src/train`) are
-> plain Python modules with no framework-specific launcher dependencies.
-> They will be wrapped in a Slurm `sbatch` script, a PBS `qsub` script,
-> a Kubernetes Job manifest, or equivalent — depending on the cluster type
-> and configuration provided.
+- [docs/EXPERIMENTS.md](docs/EXPERIMENTS.md) — evaluation protocol, results, how to run each study
+- [docs/LEADERBOARD.md](docs/LEADERBOARD.md) — leaderboard metrics, targets, what to expect, submission workflow
+- [docs/CLUSTER.md](docs/CLUSTER.md) — running on an HPC cluster (Open OnDemand, VS Code, Slurm) and troubleshooting
+- [CHANGELOG.md](CHANGELOG.md) — what changed and why
 
 ## License
 
-This project is for academic and research purposes.
+For academic and research purposes.
