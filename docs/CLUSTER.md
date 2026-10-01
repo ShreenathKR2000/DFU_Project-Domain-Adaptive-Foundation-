@@ -29,6 +29,22 @@ Always run from the project root (`python -m src.train`, not `python src/train.p
 
 ## 3. Running
 
+### One-shot experiment suite (recommended)
+
+```bash
+mkdir -p logs
+nohup bash scripts/run_all_experiments.sh > logs/all.log 2>&1 &
+tail -f logs/all.log          # progress also in logs/exp/progress.log
+```
+
+Runs the pre-flight checks (data, GPU, model download, bf16), computes near-duplicate groups, trains
+scratch / Phase-1 / regularised / pseudo-label conditions with 3 seeds (two jobs at a time), then the
+ensemble + TTA evaluation and the summary. It took **43 minutes** on one L40S (default budget 80 min;
+`BUDGET_MIN`, `PAR`, `EPOCHS`, `SEEDS` are environment knobs, see the header of the script). It skips jobs
+that would not fit the budget and resumes (skipping finished runs) if started again. Outputs:
+`results/*.json`, `logs/exp/*`, `groups.csv`, `pseudo_g*.csv`.
+
+
 ### Interactive (inside a GPU VS Code session)
 
 ```bash
@@ -57,7 +73,8 @@ lives in the project, not in the job folder).
 ## 4. Batch size and throughput (L40S)
 
 `--batch_size 32` uses ~5 GB and already drives the GPU to ~98 % utilisation, so a bigger batch
-does not speed things up; it only reduces the number of updates. Use spare memory for
+does not speed things up; it only reduces the number of updates. bf16 autocast + TF32 (`--amp`) and two
+concurrent jobs brought a 20-epoch run to ≈ 5 min. Use spare memory for
 parallel runs (e.g. one process per seed) rather than larger batches. Keep the batch size
 identical across arms of a comparison.
 

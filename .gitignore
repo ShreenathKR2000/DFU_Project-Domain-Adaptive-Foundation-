@@ -51,3 +51,8 @@ logs/
 nohup.out
 predictions*.csv
 pseudo_*.csv
+
+# Throw-away run outputs
+results/dbg*.json
+logs/exp/preflight*
+logs/exp/model_cache.log
