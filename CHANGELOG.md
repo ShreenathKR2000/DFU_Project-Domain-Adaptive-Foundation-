@@ -17,9 +17,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | Leaderboard reality check | 0.7.0 | Live DFUC2021 leaderboard: top ≈ 0.65 / rank ~50 ≈ 0.55 macro-F1 vs 0.88 internally, so the random split leaks near-duplicates. Added near-duplicate grouping, group-aware splits, stronger augmentation and label smoothing. |
 | Real results + documentation | 0.11.0 | One-shot suite run on the L40S (43 min): leak-free ablation, pseudo-labelling, ensembles, final models and challenge-test predictions; findings written up with figures (`docs/`), results/logs/artifacts committed. |
 | First leaderboard submission | 0.12.0 (Oct 2026) | `sub_final_probs.csv` scored macro-F1 0.588, rank 39. Diagnosis: good ranking (macro-AUC 0.870), misplaced decision boundaries (ischaemia over-called); test class mix equals training. Prior-matching candidate prepared. |
+| Doing the second submission properly | 0.13.0 (Oct 2026) | Pre-registered calibration protocol, `src/calibrate.py`, `run_calibration.sh`; method chosen on the leak-free split, at most one more submission. |
 | Clean-up and documentation | 0.9.0 | Shared modules (`common`, `metrics`), slimmer `train.py`, scripts moved to `scripts/`, `requirements.txt`, README rewritten and split into `docs/`; outputs verified identical to 0.8.0. |
 | Using the unlabeled data for supervision | 0.8.0 | Noisy-student pseudo-labelling pipeline; leaderboard-style metrics (macro/micro AUC, per-class F1); summary rows separated by experiment variant. |
 | Towards a leaderboard | 0.6.0 | Higher resolution, LoRA rank, extra unlabeled data for Phase 1 (e.g. DFUC2020), train-on-everything mode, ensemble + TTA inference and a submission-style CSV. |
+
+## [0.13.0] - 2026-10-17
+
+### Added
+
+- `docs/CALIBRATION_PROTOCOL.md` — pre-registered protocol for the second submission: which data
+  may inform it (no leaderboard information), the methods compared, the decision rule
+  (`noninferiority`, fixed before running) and the steps; limitations listed.
+- `src/calibrate.py` — compares plain arg-max, label-free prior matching (`prior`) and
+  validation-tuned per-class log-biases (`val_bias`) on the group-aware test split; macro-F1, UAR,
+  macro-AUC, per-class F1, predicted counts; 2,000-resample paired bootstrap vs arg-max; applies
+  the chosen rule (`--rule superiority|noninferiority`, required) and writes the calibrated
+  challenge probabilities and `calibration.json`. Numpy/sklearn only, runs on CPU.
+- `scripts/run_calibration.sh` — val/test predictions with the `g_pre_pseudo` ensemble + TTA, then
+  `src.calibrate`; everything logged to `results/calib/`.
+
+### Changed
+
+- `src/predict.py` — with `--split` and `--out`, writes ensemble probabilities plus true labels
+  (input for `src.calibrate`); `--out` default unchanged (`predictions.csv`) for the other modes.
+- `scripts/prior_match.py` — reuses `src.calibrate` (output byte-identical); docstring points to
+  the protocol.
+- README, LEADERBOARD.md §3a, EXPERIMENTS.md E7b, artifacts/README.md: `sub_priormatch_probs.csv`
+  is no longer the next submission; the protocol decides.
+
+### Verified
+
+- `src.calibrate` on synthetic data: with an injected ischaemia over-call both methods recover
+  ≈ +0.11 macro-F1 and are adopted; without a shift the rules behave as specified. Not yet run on
+  the real checkpoints.
 
 ## [0.12.0] - 2026-10-17
 

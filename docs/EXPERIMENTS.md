@@ -14,7 +14,7 @@ from the committed `results/*.json`. Raw logs are in `logs/` (see [`logs/README.
 | E5 | Ensembling and flip-TTA | done | +0.03 and +0.01–0.02 |
 | E6 | Pseudo-labelling analysis | done | rare classes contribute few confident labels |
 | E7 | Final models + predictions on the challenge test images | done | **leaderboard: macro-F1 0.588, rank 39**; test mix = training mix, ischaemia over-called |
-| E7b | Prior matching of the challenge predictions | prepared | 765 predictions change; **not yet submitted** |
+| E7b | Decision-rule calibration (prior matching / val-tuned biases), pre-registered protocol | protocol fixed, **not yet run** | direct prior matching changes 765 predictions; not submitted |
 | E8 | Low-label study (10/25/50 % labels) | implemented, **not run** | — |
 | E9 | More splits, other Phase-1 objectives | not started | — |
 
@@ -253,11 +253,14 @@ change (ischaemia → both 199, → infection 69, → none 58; none → infectio
 Output: `artifacts/sub_priormatch_probs.csv`.
 
 **Caveats.** (1) The method was chosen *after* seeing the first leaderboard score; the targets come
-from `train.csv` only, but the decision to use it is post-hoc and is reported as such. (2) Training
-has 10.4 % "both" while the test set has ≈ 8.3 %, so matching the training mix slightly over-calls
-"both". (3) No internal validation yet: the label-based equivalent (per-class biases tuned on the
-group-aware validation split, evaluated on its test split) should be run before relying on it in a
-write-up. (4) One submission only; no further tuning on the leaderboard.
+from `train.csv` only, but the decision to use it is post-hoc. (2) Training has 10.4 % "both", so
+matching the training mix may slightly over-call "both". (3) No internal validation yet.
+
+**Protocol (replaces submitting this file directly).** [CALIBRATION_PROTOCOL.md](CALIBRATION_PROTOCOL.md)
+fixes, before running: the methods (`none`, `prior`, `val_bias`), the data each may use (no
+leaderboard information), the comparison (macro-F1 on the group-aware test split, 2,000 paired
+bootstrap resamples) and the decision rule (`noninferiority`). `scripts/run_calibration.sh` runs it
+and writes `results/calib/`. Status: **protocol committed, not yet run.**
 
 ---
 

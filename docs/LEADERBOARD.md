@@ -101,10 +101,13 @@ infection +1.19, ischaemia −2.10, both +0.42. 765 predictions change:
 | both → none | 1 |
 
 These moves follow the internal confusion pattern (ischaemia ↔ both, Control ↔ infection).
-Because the idea came from reading the first leaderboard result, it is documented as
-post-hoc; the target proportions themselves come only from `train.csv`. Plan: one submission
-of this file, no further tuning on the leaderboard. A label-based variant (per-class thresholds
-tuned on the validation split) is the cleaner version for a write-up.
+
+**This file is not submitted directly.** Because the idea came from reading the first leaderboard
+result, the decision is made by a protocol fixed in advance and validated on the leak-free split
+([CALIBRATION_PROTOCOL.md](CALIBRATION_PROTOCOL.md), `scripts/run_calibration.sh`,
+`src/calibrate.py`): plain arg-max vs label-free prior matching vs validation-tuned biases, paired
+bootstrap on the internal test split, pre-registered non-inferiority rule, at most one further
+submission.
 
 ## 4. How the approach differs and why it may help
 

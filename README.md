@@ -71,12 +71,18 @@ images against the organisers' hidden labels. Raw metrics: [`results/leaderboard
   but the organisers' test images are harder still (0.588). Group-aware evaluation is necessary,
   not sufficient.
 
-**Next candidate (not yet submitted):** [`scripts/prior_match.py`](scripts/prior_match.py) adds one
-log-bias per class so that arg-max predictions reproduce the *training* label mix (no test labels
-used) → `artifacts/sub_priormatch_probs.csv`; 765 of 5,734 predictions change (mostly
-ischaemia → both/infection and Control → infection). This idea was prompted by the first
-leaderboard result and is reported as such; only one further submission is planned.
-Details: [docs/LEADERBOARD.md](docs/LEADERBOARD.md).
+**Next step — done properly.** Changing the decision rule *because* of this score and resubmitting
+would tune on the leaderboard. Instead, a protocol fixed in advance
+([docs/CALIBRATION_PROTOCOL.md](docs/CALIBRATION_PROTOCOL.md)) compares plain arg-max, label-free
+prior matching and validation-tuned class biases on the **leak-free internal split**, and a
+pre-registered decision rule picks the method (or none) before the leaderboard is used again:
+
+```bash
+RULE=noninferiority ./scripts/run_calibration.sh   # → results/calib/challenge_<method>_probs.csv
+```
+
+At most one further submission. (`artifacts/sub_priormatch_probs.csv` is the direct prior-matching
+output prepared earlier; it is superseded by the protocol and should not be submitted on its own.)
 
 ## Approach
 
@@ -128,16 +134,17 @@ cluster / Slurm / VS Code instructions in [docs/CLUSTER.md](docs/CLUSTER.md).
 | Pseudo-labels (teacher step) | `python -m src.predict --checkpoints ... --unlabeled_train --tta --out pseudo.csv` |
 | Final models on all labels | `python -m src.train --final --epochs 20 --pseudo_csv pseudo_probs.csv ...` |
 | Ensemble + TTA / submission CSV | `python -m src.predict --checkpoints ... (--split test \| --img_dir DIR) --tta` |
-| Re-balance a submission to the training class mix | `python scripts/prior_match.py artifacts/sub_final_probs.csv --out sub_priormatch_probs.csv` |
+| Validate + apply decision-rule calibration | `RULE=noninferiority ./scripts/run_calibration.sh` (→ `src.calibrate`) |
+| Re-balance a submission to the training class mix (no validation) | `python scripts/prior_match.py artifacts/sub_final_probs.csv --out sub_priormatch_probs.csv` |
 | Compare runs | `python -m src.summarize` |
 | Rebuild figures and tables | `python scripts/make_figures.py` |
 
 ## Repository layout
 
 ```
-src/            dataset, common, metrics, model, pretrain(+_model), train, predict, make_groups, summarize
-scripts/        run_all_experiments.sh (one-shot suite), run_pseudo.sh, run_lowlabel.sh, *.sbatch, make_figures.py, prior_match.py
-docs/           METHODS.md, EXPERIMENTS.md, LEADERBOARD.md, CLUSTER.md, results_tables.md, figures/
+src/            dataset, common, metrics, model, pretrain(+_model), train, predict, calibrate, make_groups, summarize
+scripts/        run_all_experiments.sh (one-shot suite), run_pseudo.sh, run_lowlabel.sh, *.sbatch, make_figures.py, prior_match.py, run_calibration.sh
+docs/           METHODS.md, EXPERIMENTS.md, LEADERBOARD.md, CALIBRATION_PROTOCOL.md, CLUSTER.md, results_tables.md, figures/
 results/        one JSON per run (metrics, confusion matrix, per-epoch history), summary.csv, ensemble_round2.csv
 logs/           raw training / evaluation logs (see logs/README.md)
 artifacts/      groups.csv, pseudo-label CSVs, challenge-test prediction CSVs (see artifacts/README.md)
@@ -149,7 +156,8 @@ CHANGELOG.md    full history from the initial state
 
 - [docs/METHODS.md](docs/METHODS.md) — what each component is and why, protocol, metrics, hyper-parameters
 - [docs/EXPERIMENTS.md](docs/EXPERIMENTS.md) — every experiment: motivation, setup, results, figures, interpretation, limitations
-- [docs/LEADERBOARD.md](docs/LEADERBOARD.md) — leaderboard context, our position, what to expect, submission workflow
+- [docs/LEADERBOARD.md](docs/LEADERBOARD.md) — leaderboard context, first submission result and diagnosis, submission workflow
+- [docs/CALIBRATION_PROTOCOL.md](docs/CALIBRATION_PROTOCOL.md) — pre-registered protocol for the second submission
 - [docs/results_tables.md](docs/results_tables.md) — all tables (generated)
 - [docs/CLUSTER.md](docs/CLUSTER.md) — running on an HPC cluster, troubleshooting
 - [CHANGELOG.md](CHANGELOG.md) — what changed and why

@@ -18,6 +18,9 @@ Two modes
        python -m src.predict --checkpoints checkpoints/*_final.pt \
            --img_dir /path/to/test_images --tta --out predictions.csv
 
+   With ``--out FILE`` the split mode also writes the ensemble probabilities and the
+   true label of every image (input for ``src.calibrate``).
+
    ``predictions.csv`` has ``image,none,infection,ischaemia,both`` with a one-hot
    arg-max prediction (same schema as train.csv); ``predictions_probs.csv`` holds
    the averaged class probabilities. Adapt the column layout to the challenge's
@@ -74,7 +77,9 @@ def parse_args() -> argparse.Namespace:
                    help="Same group CSV that was used for training (--split only).")
     p.add_argument("--val_frac", type=float, default=0.15)
     p.add_argument("--test_frac", type=float, default=0.15)
-    p.add_argument("--out", type=str, default="predictions.csv")
+    p.add_argument("--out", type=str, default=None,
+                   help="Output CSV (default predictions.csv). With --split, writes the "
+                        "ensemble probabilities plus the true label (input for src.calibrate).")
     return p.parse_args()
 
 
@@ -164,7 +169,16 @@ def main() -> None:
         for name, c in m["per_class"].items():
             print(f"  {name:<10} P={c['precision']:.3f}  R={c['recall']:.3f}  "
                   f"F1={c['f1']:.3f}  n={c['support']}")
+        if args.out:
+            os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
+            split_out = pd.concat([df[["image"]].reset_index(drop=True),
+                                   pd.DataFrame(ensemble, columns=LABEL_COLS)], axis=1)
+            split_out["label"] = y_true
+            split_out.to_csv(args.out, index=False)
+            print(f"Probabilities + labels → {args.out}")
         return
+
+    args.out = args.out or "predictions.csv"
 
     pred = ensemble.argmax(1)
     onehot = pd.DataFrame(np.eye(len(LABEL_COLS), dtype=int)[pred], columns=LABEL_COLS)
