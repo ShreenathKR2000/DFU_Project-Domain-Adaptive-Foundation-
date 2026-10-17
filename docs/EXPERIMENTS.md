@@ -13,7 +13,8 @@ from the committed `results/*.json`. Raw logs are in `logs/` (see [`logs/README.
 | E4 | Ablation on the group-aware split (6 conditions × 3 seeds) | done | Phase 1 +0.026, + pseudo-labels +0.022, strong aug/LS no help |
 | E5 | Ensembling and flip-TTA | done | +0.03 and +0.01–0.02 |
 | E6 | Pseudo-labelling analysis | done | rare classes contribute few confident labels |
-| E7 | Final models + predictions on the challenge test images | done | class mix shift visible; **not yet submitted** |
+| E7 | Final models + predictions on the challenge test images | done | **leaderboard: macro-F1 0.588, rank 39**; test mix = training mix, ischaemia over-called |
+| E7b | Decision-rule calibration (prior matching / val-tuned biases), pre-registered protocol | protocol fixed, **not yet run** | direct prior matching changes 765 predictions; not submitted |
 | E8 | Low-label study (10/25/50 % labels) | implemented, **not run** | — |
 | E9 | More splits, other Phase-1 objectives | not started | — |
 
@@ -226,6 +227,41 @@ a different class mix (more ischaemia, fewer infections) or looks different enou
 predictions. It is an inference; the leaderboard score (not yet obtained) will test it. The
 submission CSVs are in `artifacts/` (`sub_final*.csv`, `sub_groupmodels*.csv`).
 
+**Update after the first submission (17 Oct 2026).** The leaderboard result answers the question
+left open above. `sub_final_probs.csv` scored **macro-F1 0.588 (rank 39)**; from the reported
+per-class precision and recall, the test set contains ≈ 2,517 Control / 2,516 infection / 225
+ischaemia / 476 both — **the training mix, not a shifted one**. The predicted mix (545 ischaemia,
+1,954 infection) was therefore wrong: the models over-call ischaemia (precision 0.33, recall 0.81)
+and miss ≈ 560 infections. Ischaemia AUC is 0.952, so the ranking is good and the decision
+boundaries are the problem. Full table and diagnosis: [LEADERBOARD.md §3a](LEADERBOARD.md).
+
+---
+
+## E7b — Prior matching on the challenge predictions (prepared, not yet submitted)
+
+**Why.** E7 + the first leaderboard result show correct ranking but misplaced decision boundaries
+on the challenge images.
+
+**Setup.** [`scripts/prior_match.py`](../scripts/prior_match.py) fits one additive log-bias per class
+(iterative update of `b_c += 0.05·(log target_c − log predicted share_c)`, 5,000 steps) so that
+arg-max predictions on the unlabeled challenge images reproduce the training label proportions
+(42.9 / 42.9 / 3.8 / 10.4 %), then renormalises the probabilities. No test labels are used.
+
+**Result on `sub_final_probs.csv`.** Biases none +0.50 / infection +1.19 / ischaemia −2.10 / both
++0.42; predicted mix 48.6 / 34.1 / 9.5 / 7.9 % → 42.8 / 42.9 / 3.8 / 10.4 %; 765 of 5,734 predictions
+change (ischaemia → both 199, → infection 69, → none 58; none → infection 386; both → infection 52).
+Output: `artifacts/sub_priormatch_probs.csv`.
+
+**Caveats.** (1) The method was chosen *after* seeing the first leaderboard score; the targets come
+from `train.csv` only, but the decision to use it is post-hoc. (2) Training has 10.4 % "both", so
+matching the training mix may slightly over-call "both". (3) No internal validation yet.
+
+**Protocol (replaces submitting this file directly).** [CALIBRATION_PROTOCOL.md](CALIBRATION_PROTOCOL.md)
+fixes, before running: the methods (`none`, `prior`, `val_bias`), the data each may use (no
+leaderboard information), the comparison (macro-F1 on the group-aware test split, 2,000 paired
+bootstrap resamples) and the decision rule (`noninferiority`). `scripts/run_calibration.sh` runs it
+and writes `results/calib/`. Status: **protocol committed, not yet run.**
+
 ---
 
 ## E8 — Low-label study (not run)
@@ -245,7 +281,7 @@ three seeds; read as a label-efficiency curve (`python -m src.summarize` writes
 - Phase-1 variants: reconstruct DINOv2 patch *features* instead of pixels, lower mask ratio, higher
   LoRA rank, longer training or extra unlabeled images (`--extra_img_dirs`).
 - Separate strong augmentation from label smoothing; per-class pseudo-label thresholds.
-- Class-prior or threshold adjustment for the shifted test mix (check challenge rules first).
+- Per-class thresholds / biases tuned on the validation split (label-based version of E7b).
 - Higher resolution (`--img_size 448`) and a larger backbone.
 
 ---
@@ -258,8 +294,8 @@ three seeds; read as a label-efficiency curve (`python -m src.summarize` writes
 - **Selection on test**: ensemble sets were compared on the test split; best-epoch selection uses the
   validation split of the same data.
 - **Pseudo-label pool not group-checked** (see E6).
-- **No leaderboard result** yet; the hidden test set is shifted, so internal scores overstate
-  performance (E3, E7).
+- **Internal scores overstate leaderboard performance**: 0.838 internal (3-model ensemble + TTA)
+  vs 0.588 on the organisers' test set (E3, E7).
 - **Mixed numerics**: the random-split runs used fp32 / 30 epochs; the group-aware suite used bf16 +
   TF32 / 20 epochs. Conditions inside each group are compared like for like.
 

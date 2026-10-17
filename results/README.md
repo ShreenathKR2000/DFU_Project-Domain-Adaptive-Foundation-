@@ -5,6 +5,7 @@
 | `<run>.json` | One file per training run: `config` (all CLI settings), `split_sizes`, `split_class_counts`, `best_epoch`, `test` (metrics at the best-validation epoch: macro-F1, per-class precision/recall/F1/support, macro/micro AUC, accuracy, confusion matrix), `test_last_epoch`, per-epoch `history` (train loss/CE/SupCon/accuracy, validation metrics), `train_seconds`. |
 | `*_final.json` | The three final models (trained on all labels; no test metrics, only config and training history). |
 | `summary.csv` | Per-run table written by `python -m src.summarize` (macro-F1, last-epoch F1, AUC, per-class F1). |
+| `leaderboard_submission1.json` | Metrics returned by the DFUC2021 live testing leaderboard for `artifacts/sub_final_probs.csv` (17 Oct 2026; macro-F1 0.588, rank 39). |
 | `ensemble_round2.csv` | Ensemble + TTA scores transcribed from terminal output (no log file exists). |
 
 Run names: `scratch_seed*` / `pretrained_seed*` are the **random-split** runs (894-image test split);
