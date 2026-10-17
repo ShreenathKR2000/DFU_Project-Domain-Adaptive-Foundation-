@@ -16,9 +16,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | Label-efficiency study | 0.5.0 | `--train_frac`, grouped summary, CSV + plot, to test whether Phase 1 helps when labels are scarce. |
 | Leaderboard reality check | 0.7.0 | Live DFUC2021 leaderboard: top ≈ 0.65 / rank ~50 ≈ 0.55 macro-F1 vs 0.88 internally, so the random split leaks near-duplicates. Added near-duplicate grouping, group-aware splits, stronger augmentation and label smoothing. |
 | Real results + documentation | 0.11.0 | One-shot suite run on the L40S (43 min): leak-free ablation, pseudo-labelling, ensembles, final models and challenge-test predictions; findings written up with figures (`docs/`), results/logs/artifacts committed. |
+| First leaderboard submission | 0.12.0 (Oct 2026) | `sub_final_probs.csv` scored macro-F1 0.588, rank 39. Diagnosis: good ranking (macro-AUC 0.870), misplaced decision boundaries (ischaemia over-called); test class mix equals training. Prior-matching candidate prepared. |
 | Clean-up and documentation | 0.9.0 | Shared modules (`common`, `metrics`), slimmer `train.py`, scripts moved to `scripts/`, `requirements.txt`, README rewritten and split into `docs/`; outputs verified identical to 0.8.0. |
 | Using the unlabeled data for supervision | 0.8.0 | Noisy-student pseudo-labelling pipeline; leaderboard-style metrics (macro/micro AUC, per-class F1); summary rows separated by experiment variant. |
 | Towards a leaderboard | 0.6.0 | Higher resolution, LoRA rank, extra unlabeled data for Phase 1 (e.g. DFUC2020), train-on-everything mode, ensemble + TTA inference and a submission-style CSV. |
+
+## [0.12.0] - 2026-10-17
+
+### Added
+
+- **First leaderboard result:** `artifacts/sub_final_probs.csv` submitted to the DFUC2021 live
+  testing leaderboard — **macro-F1 0.5878, rank 39** (top entry 0.659). Raw metrics in
+  `results/leaderboard_submission1.json`.
+- README: "Leaderboard result" line and a *First leaderboard submission* section (overall score vs
+  #1 / #4 / #32, tie-break metrics, per-class F1/precision/recall/AUC with strongest and weakest
+  categories, interpretation, next candidate).
+- `docs/LEADERBOARD.md` §3a: result, implied test-set class counts, diagnosis, prior-matching
+  candidate with the table of changed predictions; project row in the leaderboard table.
+- `docs/EXPERIMENTS.md` E7 update and new **E7b** (prior matching; prepared, not submitted).
+- `scripts/prior_match.py` — fits one log-bias per class so arg-max predictions on unlabeled
+  images match the training label mix (no test labels used); writes re-balanced probabilities.
+- `artifacts/sub_priormatch_probs.csv` — `sub_final_probs.csv` after prior matching
+  (765 of 5,734 predictions change). Next submission candidate.
+
+### Findings recorded
+
+- Strongest categories: Control F1 0.744 (within 0.03 of the top 4), Infection F1 0.658 (inside the
+  top-4 range); macro recall / UAR 0.660 (above #1); macro-AUC 0.870 (= #4).
+- Weakest: ischaemia F1 0.473 (precision 0.33, recall 0.81, AUC 0.95) and "both" F1 0.477.
+- Implied test-set mix ≈ 43.9 / 43.9 / 3.9 / 8.3 % (from predicted count × precision / recall) —
+  the same as training. The model predicted 545 ischaemia vs ≈ 225 true and missed ≈ 560 infections.
+- Internal (leak-free) 0.838 vs leaderboard 0.588: group-aware evaluation removed part of the
+  optimism but internal scores still overstate performance on the organisers' test set.
+
+### Changed
+
+- **Corrected:** the E7 / LEADERBOARD.md reading that the challenge test set has a different class
+  mix. It does not; the shift is in appearance and decision boundaries. Pre-submission
+  expectations in LEADERBOARD.md §5 are kept and labelled as such.
+- `docs/LEADERBOARD.md` §6: submission format confirmed from the evaluation page (per-class
+  probabilities, `image,none,infection,ischaemia,both`); tie-break order (UAR, then macro-AUC).
+- `artifacts/README.md`, `results/README.md`: new files listed; `sub_final*` marked as submitted.
 
 ## [0.11.0] - 2026-10-01
 

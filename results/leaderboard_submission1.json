@@ -1,0 +1,30 @@
+{
+  "case": {},
+  "aggregates": {
+    "bothAUC": 0.8896647285768625,
+    "noneAUC": 0.8360245141863429,
+    "Accuracy": 0.6705615626089989,
+    "macroAUC": 0.8701527053417609,
+    "microAUC": 0.8896601450898365,
+    "BothRecall": 0.4642857142857143,
+    "NoneRecall": 0.7834723877632102,
+    "MacroRecall": 0.660226930564342,
+    "BothF1-Score": 0.47680690399137,
+    "NoneF1-Score": 0.7440105640445198,
+    "infectionAUC": 0.8028052409884384,
+    "ischaemiaAUC": 0.9516572880740606,
+    "BothPrecision": 0.49002217294900224,
+    "MacroF1-Score": 0.587815715392133,
+    "NonePrecision": 0.7083333333333334,
+    "MacroPrecision": 0.5711508571702478,
+    "InfectionRecall": 0.5842607313195548,
+    "IschaemiaRecall": 0.8088888888888889,
+    "InfectionF1-Score": 0.6577181208053692,
+    "IschaemiaF1-Score": 0.4727272727272728,
+    "InfectionPrecision": 0.7523029682702149,
+    "IschaemiaPrecision": 0.3339449541284404,
+    "WeightedAverageRecall": 0.6705615626089989,
+    "WeightedAverageF1-Score": 0.67332003911927,
+    "WeightedAveragePrecision": 0.6948129468382428
+  }
+}

@@ -8,7 +8,8 @@ self-supervised **domain adaptation** on unlabeled images, **pseudo-labelling**,
 - **Task:** 4 classes — `none` (leaderboard name: *Control*), `infection`, `ischaemia`, `both`.
 - **Data:** 5,955 labeled + 3,994 unlabeled training images, 5,734 hidden-label test images.
   Strong imbalance (ischaemia ≈ 4 % of the labels).
-- **Leaderboard metric:** macro-F1 (plus per-class F1 and AUC) — see [docs/LEADERBOARD.md](docs/LEADERBOARD.md).
+- **Leaderboard metric:** macro-F1 (ties: macro recall / UAR, then macro-AUC) — see [docs/LEADERBOARD.md](docs/LEADERBOARD.md).
+- **Leaderboard result:** **macro-F1 0.588, rank 39** (first submission, 17 Oct 2026; top entry 0.659).
 
 ![From an optimistic internal score to the leaderboard range](docs/figures/fig_story.png)
 
@@ -24,12 +25,58 @@ unless stated. Full details, figures and caveats: [docs/EXPERIMENTS.md](docs/EXP
 | 3 | Do the unlabeled images help as pseudo-labels? | **A little.** Phase 1 + pseudo-labels: **0.821** (+0.022 over Phase 1 alone, 3/3 seeds). Few rare-class pseudo-labels pass the confidence filter, so the gain probably comes mostly from extra common-class data. |
 | 4 | Do strong augmentation + label smoothing help? | **No.** Macro-AUC drops (0.936 → 0.905) and ischaemia F1 drops (0.712 → 0.655) for scratch models. |
 | 5 | Do ensembles / flip-TTA help? | **Yes — the most reliable gain.** 3-model ensembles add ≈ +0.03 macro-F1, flip-TTA another +0.01–0.02. Best: **0.838** (3 models) and **0.847** (9 models) with TTA. |
-| 6 | How do the models behave on the real challenge test images? | Predicted class mix differs from training (ischaemia 8–10 % vs 4 %, infection 29–34 % vs 43 %): a **distribution shift**. No leaderboard score exists yet (not submitted). |
+| 6 | How do the models behave on the real challenge test images? | They **over-call ischaemia and miss infections.** The models predict 9.5 % ischaemia and 34 % infection, but the leaderboard result implies the test set has the training mix (≈ 4 % and 44 %). The class mix did not shift; the decision boundaries did. |
+| 7 | What does the leaderboard say? | **Macro-F1 0.588, rank 39** on the open DFUC2021 testing leaderboard (top: 0.659). Ranking quality is near the top (macro-AUC 0.870 = 4th place); the hard decisions are the weak point. See below. |
 
-> **What is *not* shown.** No leaderboard score; no low-label study; results come from one
-> fixed split (seeds vary initialisation only); ischaemia has only 29 test images, so
-> per-class results are noisy. The leaderboard (top-4 ≈ 0.65–0.66 macro-F1) uses a hidden,
-> shifted test set, so our internal 0.77–0.85 is **not comparable** with it.
+> **What is *not* shown.** No low-label study; internal results come from one fixed split (seeds
+> vary initialisation only); ischaemia has only 29 internal test images, so per-class results are
+> noisy. Internal scores (0.77–0.85) were measured on held-out *training* images and turned out to
+> be ≈ 0.26 higher than the leaderboard score (0.588) on the organisers' test set.
+
+## First leaderboard submission (17 Oct 2026)
+
+Submitted `artifacts/sub_final_probs.csv` (3 final models: Phase 1 + pseudo-labels, all labels,
+flip TTA) to the DFUC2021 **live testing leaderboard (open)**, which scores the 5,734 challenge test
+images against the organisers' hidden labels. Raw metrics: [`results/leaderboard_submission1.json`](results/leaderboard_submission1.json).
+
+**Overall: macro-F1 0.5878 → rank 39.** Expected range from the internal results was 0.55–0.62.
+
+| Metric | This project | #1 | #4 | #32 | Reading |
+|---|---|---|---|---|---|
+| **Macro-F1** (ranking) | **0.588** | 0.659 | 0.652 | 0.592 | 0.07 behind the top |
+| Macro recall (UAR, 1st tie-break) | **0.660** | 0.659 | 0.686 | 0.580 | higher than #1 and #2 |
+| Macro AUC (2nd tie-break) | **0.870** | 0.895 | 0.870 | 0.869 | equal to 4th place |
+| Micro AUC | 0.890 | 0.917 | 0.899 | 0.897 | |
+| Accuracy / micro-F1 | 0.671 | 0.717 | 0.693 | 0.661 | above #32 |
+| Macro precision | 0.571 | 0.665 | 0.652 | 0.618 | weakest aggregate |
+
+**Per class**
+
+| Class | F1 | Precision | Recall | AUC | Top-4 F1 range | Verdict |
+|---|---|---|---|---|---|---|
+| Control (`none`) | **0.744** | 0.708 | 0.783 | 0.836 | 0.746–0.771 | ✅ best category — within 0.03 of the top 4 |
+| Infection | **0.658** | 0.752 | 0.584 | 0.803 | 0.642–0.715 | ✅ inside the top-4 range (beats #3 and #4) |
+| Ischaemia | 0.473 | 0.334 | **0.809** | **0.952** | 0.584–0.628 | ⚠️ finds most cases (highest recall and AUC of all classes) but 2 of 3 ischaemia calls are wrong |
+| Both | 0.477 | 0.490 | 0.464 | 0.890 | 0.563–0.592 | ⚠️ weakest class |
+
+**What it means**
+
+- **Strengths:** Control F1 is within 0.03 of the top 4 and Infection F1 is inside the top-4 range; UAR is above #1; macro-AUC equals 4th
+  place. The model *ranks* images about as well as the leading entries.
+- **Weakness — decision boundaries, not features:** ischaemia AUC is 0.95 but F1 is 0.47. Implied
+  test-set class counts (predicted count × precision / recall) are ≈ 2,517 / 2,516 / 225 / 476 —
+  the same mix as training — while the model predicted 2,784 / 1,954 / **545** / 451. It
+  over-calls ischaemia (×2.4) and misses ≈ 560 infections.
+- **Internal vs leaderboard:** the leak-free split removed ≈ 0.1 of optimism (0.88 → 0.77–0.85),
+  but the organisers' test images are harder still (0.588). Group-aware evaluation is necessary,
+  not sufficient.
+
+**Next candidate (not yet submitted):** [`scripts/prior_match.py`](scripts/prior_match.py) adds one
+log-bias per class so that arg-max predictions reproduce the *training* label mix (no test labels
+used) → `artifacts/sub_priormatch_probs.csv`; 765 of 5,734 predictions change (mostly
+ischaemia → both/infection and Control → infection). This idea was prompted by the first
+leaderboard result and is reported as such; only one further submission is planned.
+Details: [docs/LEADERBOARD.md](docs/LEADERBOARD.md).
 
 ## Approach
 
@@ -81,6 +128,7 @@ cluster / Slurm / VS Code instructions in [docs/CLUSTER.md](docs/CLUSTER.md).
 | Pseudo-labels (teacher step) | `python -m src.predict --checkpoints ... --unlabeled_train --tta --out pseudo.csv` |
 | Final models on all labels | `python -m src.train --final --epochs 20 --pseudo_csv pseudo_probs.csv ...` |
 | Ensemble + TTA / submission CSV | `python -m src.predict --checkpoints ... (--split test \| --img_dir DIR) --tta` |
+| Re-balance a submission to the training class mix | `python scripts/prior_match.py artifacts/sub_final_probs.csv --out sub_priormatch_probs.csv` |
 | Compare runs | `python -m src.summarize` |
 | Rebuild figures and tables | `python scripts/make_figures.py` |
 
@@ -88,7 +136,7 @@ cluster / Slurm / VS Code instructions in [docs/CLUSTER.md](docs/CLUSTER.md).
 
 ```
 src/            dataset, common, metrics, model, pretrain(+_model), train, predict, make_groups, summarize
-scripts/        run_all_experiments.sh (one-shot suite), run_pseudo.sh, run_lowlabel.sh, *.sbatch, make_figures.py
+scripts/        run_all_experiments.sh (one-shot suite), run_pseudo.sh, run_lowlabel.sh, *.sbatch, make_figures.py, prior_match.py
 docs/           METHODS.md, EXPERIMENTS.md, LEADERBOARD.md, CLUSTER.md, results_tables.md, figures/
 results/        one JSON per run (metrics, confusion matrix, per-epoch history), summary.csv, ensemble_round2.csv
 logs/           raw training / evaluation logs (see logs/README.md)
